@@ -11,9 +11,10 @@ Pre-alpha: nothing is implemented yet; this is the package skeleton.
 
 Examples
 --------
+>>> from importlib.metadata import version
 >>> import flanpy
->>> flanpy.__version__
-'0.0.1.dev0'
+>>> flanpy.__version__ == version("flanpy")
+True
 """
 
 from importlib.metadata import version as _version
