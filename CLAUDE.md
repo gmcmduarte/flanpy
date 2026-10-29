@@ -106,9 +106,9 @@ python -m twine check dist/*         # release metadata check
 
 Manual for now (until trusted publishing is set up). From a clean `main` that CI has passed:
 
-1. Build: `rm -rf dist && python -m build`.
-2. Check: `python -m twine check dist/*`.
-3. Upload: `TWINE_USERNAME=__token__ python -m twine upload dist/flanpy-<version>*` (use `python -m twine`, not the `twine` script, which can carry a stale interpreter path).
+1. Build: `rm -rf dist && .venv/bin/python -m build`.
+2. Check: `.venv/bin/python -m twine check dist/*`.
+3. Upload: `.venv/bin/python -m twine upload dist/*`. Credentials come from the `[pypi]` section of the maintainer's `~/.pypirc` (username `__token__`, project-scoped token); never read or print that file. Use `python -m twine`, not the `twine` script, which can carry a stale interpreter path.
 4. Tag the uploaded commit: `git tag -a v<version> <commit> -m "flanpy <version>"` and `git push origin v<version>`.
 5. Bump the version in `pyproject.toml` and `CITATION.cff` to the next `.devN` in a separate commit.
 
@@ -129,6 +129,6 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - [x] Tooling: pytest, ruff, mypy (strict) set up. Shibuya 2026.7.12 builds cleanly with Sphinx 9.2.0 on Python 3.13 (`-W`, no warnings); tests and mypy also pass on Python 3.15.
 - [x] Read the Docs: project `flanpy` imported 2026-10-29; https://flanpy.readthedocs.io/ (pull-request builds enabled).
 - [x] PyPI: name reserved with `0.0.1.dev0` on 2026-10-29; https://pypi.org/project/flanpy/.
-- User action (Guilherme): replace the account-wide PyPI token with a project-scoped token for `flanpy`.
+- [x] PyPI token: project-scoped token for `flanpy` in `~/.pypirc` `[pypi]` (done by Guilherme, 2026-10-29).
 - PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
 - Remaining technical risk: roots of characteristic polynomials that are not expressible in radicals (see Decisions), and Case I curves with larger systems, where the Groebner step may be slow. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.
