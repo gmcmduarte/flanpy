@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flanpy"
-version = "0.0.1.dev0"
+version = "0.0.1.dev1"
 description = "Analytic combinatorics toolchain for algebraic generating functions in descriptional complexity."
 readme = "README.md"
 requires-python = ">=3.13"
