@@ -283,7 +283,7 @@ if it is not installed).
   - rational coefficients `F = 1 + zF/2` (`Fraction(1, 2^n)`, checks the `Fraction`
     result type);
   - Catalan `F = 1 + zF^2` (`binomial(2n, n)/(n + 1)`, `n <= 200`);
-  - Motzkin `F = 1 + zF + zF^2` (three-term recurrence, `n <= 200`);
+  - Motzkin `F = 1 + zF + z^2 F^2` (three-term recurrence, `n <= 200`);
   - a 2-equation system `{F = 1 + zG^2, G = 1 + zF^2}` (both are Catalan);
   - zero coordinates `{F = z + G, G = G}` (warns at construction; `F = z`, `G = 0`);
   - signed `F = z − zF` (`(−1)^(n+1)`), and the two-step signed system
