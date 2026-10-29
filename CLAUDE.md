@@ -47,7 +47,8 @@ Reference papers (uploaded to the Claude project):
 ```
 src/flanpy/
   _system.py     System (F = Phi(z, k, F)) and its well-posedness check; re-exported from flanpy
-  _series.py     power-series coefficients of a System; re-exported from flanpy (planned)
+  _series.py     series / series_in_k: coefficients of a System; re-exported from flanpy
+  _rings.py      private coefficient rings: pure-Python and python-flint backends
   symbolic/      grammar -> equations, bivariate cost series (d/du at u=1)
   elimination/   Groebner and resultants, backend interface
   singularity/   m_rho, m_a, Case I/II, dominant-singularity checks
