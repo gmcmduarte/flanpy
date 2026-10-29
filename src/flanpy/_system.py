@@ -90,8 +90,10 @@ class UndecidedSystemError(WellPosednessError):
 
     Examples
     --------
-    A system with a negative coefficient whose Jacobian at ``z = 0`` is not
-    nilpotent:
+    ``F = z - F`` is in fact ill-posed: its iterates alternate ``0, z, 0, z, ...``
+    and never converge. But the check is conservative for signed systems: it
+    proves ill-posedness only when the constant terms cycle, and here they are
+    constantly 0, so it reports "undecided" rather than guessing.
 
     >>> from sympy import symbols
     >>> from flanpy import System

@@ -74,6 +74,11 @@ For systems with negative coefficients the check is only partial. When it cannot
 decide, it raises {class}`~flanpy.UndecidedSystemError`, which never claims that the
 system is ill-posed. Both errors derive from {class}`~flanpy.WellPosednessError`.
 
+$F = z - F$ is in fact ill-posed: its iterates alternate $0, z, 0, z, \dots$ and never
+converge. But the check is conservative for signed systems: it proves ill-posedness
+only when the constant terms cycle, and here they are constantly 0, so it reports
+"undecided" rather than guessing.
+
 ```{code-cell} python
 try:
     System({F: z - F}, z=z)
