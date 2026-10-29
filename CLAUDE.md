@@ -2,7 +2,7 @@
 
 Open-source Python package implementing the analytic-combinatorics toolchain used by our research group (Broda, Machiavelo, Moreira, Reis, and Guilherme), so that papers can ship a runnable script that reproduces their results, instead of Mathematica files.
 
-This file holds the project's context, decisions and base rules. Nothing is implemented yet; update this file when decisions change.
+This file holds the project's context, decisions and base rules. The package scaffolding exists (see Tooling); no algorithm is implemented yet. Update this file when decisions change.
 
 ## What the package does
 
@@ -74,9 +74,28 @@ These are the ground truth; the package is not "done" for a feature until its te
 - **Small, tested steps.** One module at a time, with its acceptance test from the list above.
 - **Commit hygiene**: clear messages, one logical change per commit, no generated artifacts or large data files in the repo.
 
-## Planned tooling (not set up yet)
+## Tooling
 
-`pytest` (tests), `ruff` (lint/format), `mypy` or `pyright` (types), `pyproject.toml` with a `src/` layout, GitHub Actions CI, `CITATION.cff` and a short `CONTRIBUTING.md`. Confirm choices when the repository is created.
+All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` layout). Version is static in `pyproject.toml`; `pyflan.__version__` reads it from the installed metadata.
+
+- **Extras**: `fast` (python-flint), `dev` (pytest, ruff, mypy, build), `docs` (sphinx, shibuya, myst-parser, myst-nb, sphinxcontrib-bibtex).
+- **Types**: `mypy --strict` (chosen over pyright: Python-native, no Node dependency). Tests are type-checked but may omit annotations.
+- **Lint/format**: `ruff` with pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, RUF and pydocstyle (NumPy convention). `dev/spikes/` is excluded (throwaway code).
+- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/pyflan`; warnings are errors.
+- **SPDX**: every `.py` file starts with `# SPDX-License-Identifier: GPL-3.0-or-later`.
+- **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 and `3.x`, plus a docs job (`sphinx-build -W`). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
+- **Repo files**: `README.md`, `CITATION.cff`, `CONTRIBUTING.md`, `docs/refs.bib` (DOIs checked against Crossref).
+
+Commands (from the repo root, in a Python 3.13 venv):
+
+```
+pip install -e ".[dev,docs]"         # add ,fast for python-flint
+pytest                               # tests + doctests
+ruff check . && ruff format --check .
+mypy                                 # strict, src + tests
+sphinx-build -W --keep-going docs docs/_build/html
+python -m build                      # sdist + wheel into dist/
+```
 
 ### Documentation (decided)
 
@@ -92,6 +111,7 @@ These are the ground truth; the package is not "done" for a feature until its te
 
 ## Open items
 
-- Tooling (pytest, ruff, mypy/pyright, Shibuya + Sphinx/Python 3.13 compatibility): settle as we go.
+- [x] Tooling: pytest, ruff, mypy (strict) set up. Shibuya 2026.7.12 builds cleanly with Sphinx 9.2.0 on Python 3.13 (`-W`, no warnings); tests and mypy also pass on Python 3.15.
+- Docs hosting: `.readthedocs.yaml` exists, but the Read the Docs project is not connected yet (or use GitHub Pages instead).
 - `pyflan` was free on PyPI on 2026-10-29; reserve it (e.g. by publishing an early release) when convenient.
 - Remaining technical risk: roots of characteristic polynomials that are not expressible in radicals (see Decisions), and Case I curves with larger systems, where the Groebner step may be slow. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.
