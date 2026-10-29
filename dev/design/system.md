@@ -318,40 +318,70 @@ The check never samples values of `k`.
 
 ### 5.8 Messages
 
-Actual output of the implementation.
+Actual output of the implementation. Each message has a one-line headline, then
+the details wrapped at 78 columns.
 
 ```
-flanpy.IllPosedSystemError: the system is ill-posed: the iteration from 0 does not converge. At z = 0 the constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[1]], which is not nilpotent: the dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau, Salvy & Soria 2012, Thm 5.5 and Thm 3.6.)
+flanpy.IllPosedSystemError: the system is ill-posed.
+  The iteration from 0 does not converge. At z = 0 the constant terms are
+  F(0) = 0 and the Jacobian dPhi/dF is [[1]], which is not nilpotent: the
+  dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau,
+  Salvy & Soria 2012, arXiv:1109.2688v2, Thm 5.5 and Thm 3.6.)
   Equations:
     F = F + z
 
-flanpy.IllPosedSystemError: the system is ill-posed: the constant terms do not stabilise, so the iteration does not converge. After 1 iteration(s) F(0) = 1, after 2: F(0) = 2. A convergent system with non-negative coefficients reaches its constant terms within 1 iteration(s) (Pivoteau, Salvy & Soria 2012, Thm 5.7).
+flanpy.IllPosedSystemError: the system is ill-posed.
+  The constant terms do not stabilise, so the iteration does not converge.
+  After 1 iteration(s) F(0) = 1, after 2: F(0) = 2. A convergent system with
+  non-negative coefficients reaches its constant terms within 1 iteration(s)
+  (Pivoteau, Salvy & Soria 2012, arXiv:1109.2688v2, Thm 5.7).
   Equations:
     F = F + 1
 
-flanpy.IllPosedSystemError: the system is ill-posed: the iteration from 0 does not converge. At z = 0 the constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[k]], which is not nilpotent: the dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau, Salvy & Soria 2012, Thm 5.5 and Thm 3.6.)
+flanpy.IllPosedSystemError: the system is ill-posed.
+  The iteration from 0 does not converge. At z = 0 the constant terms are
+  F(0) = 0 and the Jacobian dPhi/dF is [[k]], which is not nilpotent: the
+  dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau,
+  Salvy & Soria 2012, arXiv:1109.2688v2, Thm 5.5 and Thm 3.6.)
   Equations:
     F = F*k + z
-  This holds for every integer k >= 1 (no coefficient vanishes there, so the support of the system does not change).
+  This holds for every integer k >= 1 (no coefficient vanishes there, so the
+  support of the system does not change).
 
-flanpy.IllPosedSystemError: the system is ill-posed: the iteration from 0 does not converge. At z = 0 the constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[k - 1]], which is not nilpotent: the dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau, Salvy & Soria 2012, arXiv:1109.2688v2, Thm 5.5 and Thm 3.6.)
+flanpy.IllPosedSystemError: the system is ill-posed.
+  The iteration from 0 does not converge. At z = 0 the constant terms are
+  F(0) = 0 and the Jacobian dPhi/dF is [[k - 1]], which is not nilpotent: the
+  dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau,
+  Salvy & Soria 2012, arXiv:1109.2688v2, Thm 5.5 and Thm 3.6.)
   Equations:
     F = F*k - F + z
-  This holds for every integer k >= 2. At k = 1 some coefficients vanish, so k = 1 is not covered: use specialize(1) to check it.
+  This holds for every integer k >= 2. At k = 1 some coefficients vanish, so k
+  = 1 is not covered: use specialize(1) to check it.
 
-flanpy.IllPosedSystemError: the system is ill-posed: the constant terms cycle, so the coefficient of z^0 never settles and the iteration does not converge: F(0) = 0 -> F(0) = 1 -> F(0) = 0.
+flanpy.IllPosedSystemError: the system is ill-posed.
+  The constant terms cycle, so the coefficient of z^0 never settles and the
+  iteration does not converge: F(0) = 0 -> F(0) = 1 -> F(0) = 0.
   Equations:
     F = 1 - F
 
-flanpy.UndecidedSystemError: could not decide whether the system is well-posed: it has negative coefficients, and the nilpotency test fails. At z = 0 the constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[-1]], which is not nilpotent: the dependency cycle F -> F has no factor z. For systems with negative coefficients this failure does not prove divergence.
+flanpy.UndecidedSystemError: could not decide whether the system is well-posed.
+  It has negative coefficients, and the nilpotency test fails. At z = 0 the
+  constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[-1]], which is not
+  nilpotent: the dependency cycle F -> F has no factor z. For systems with
+  negative coefficients this failure does not prove divergence.
   Equations:
     F = -F + z
 
-flanpy.UndecidedSystemError: could not decide whether the system is well-posed: it has negative coefficients, and its constant terms did not stabilise within 32 iterations from 0 (last two: F(0) = 31, then F(0) = 32).
+flanpy.UndecidedSystemError: could not decide whether the system is well-posed.
+  It has negative coefficients, and its constant terms did not stabilise
+  within 32 iterations from 0 (last two: F(0) = 31, then F(0) = 32).
   Equations:
     F = -F**2*z + F + 1
 
-flanpy.ZeroCoordinateWarning: the solution has zero coordinates: F is identically 0 (every iterate from 0 is 0) and kept as 0. Pivoteau, Salvy & Soria (2012, Def. 5.3) exclude such systems. Remove this unknown if this is not intended.
+flanpy.ZeroCoordinateWarning: G is identically 0 (zero coordinate).
+  Every iterate from 0 is 0 there, so the solution keeps it as 0. Pivoteau,
+  Salvy & Soria (2012, arXiv:1109.2688v2, Def. 5.3) exclude such systems.
+  Remove this unknown if this is not intended.
 ```
 
 Malformed input raises `ValueError` or `TypeError`, naming the offending equation. For

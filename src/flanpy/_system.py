@@ -9,6 +9,8 @@ theorems, lemmas, algorithms).
 from __future__ import annotations
 
 import os
+import re
+import textwrap
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
@@ -179,10 +181,16 @@ class System:
 
     An ill-posed system: ``F = F + z`` never fixes the coefficient of ``z``.
 
-    >>> System({F: F + z}, z=z)  # doctest: +ELLIPSIS
+    >>> System({F: F + z}, z=z)
     Traceback (most recent call last):
         ...
-    flanpy.IllPosedSystemError: the system is ill-posed: ...
+    flanpy.IllPosedSystemError: the system is ill-posed.
+      The iteration from 0 does not converge. At z = 0 the constant terms are
+      F(0) = 0 and the Jacobian dPhi/dF is [[1]], which is not nilpotent: the
+      dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau,
+      Salvy & Soria 2012, arXiv:1109.2688v2, Thm 5.5 and Thm 3.6.)
+      Equations:
+        F = F + z
     """
 
     __slots__ = (
@@ -537,13 +545,17 @@ class _Check:
                     nonzero[i] = changed = True
         zeros = [str(self.s._unknowns[i]) for i in range(m) if not nonzero[i]]
         if zeros:
+            one = len(zeros) == 1
             warnings.warn(
-                f"the solution has zero coordinates: {', '.join(zeros)} "
-                f"{'is' if len(zeros) == 1 else 'are'} identically 0 (every iterate "
-                "from 0 is 0) and kept as 0. Pivoteau, Salvy & Soria (2012, "
-                "arXiv:1109.2688v2, Def. 5.3) exclude such systems. Remove "
-                f"{'this unknown' if len(zeros) == 1 else 'these unknowns'} if this "
-                "is not intended.",
+                f"{', '.join(zeros)} {'is' if one else 'are'} identically 0 "
+                f"(zero coordinate{'' if one else 's'}).\n"
+                + _wrap(
+                    "Every iterate from 0 is 0 there, so the solution keeps "
+                    f"{'it' if one else 'them'} as 0. Pivoteau, Salvy & Soria (2012, "
+                    "arXiv:1109.2688v2, Def. 5.3) exclude such systems. Remove "
+                    f"{'this unknown' if one else 'these unknowns'} if this is not "
+                    "intended."
+                ),
                 ZeroCoordinateWarning,
                 # Point at the caller's code, from any depth inside flanpy.
                 skip_file_prefixes=(os.path.dirname(__file__),),
@@ -600,10 +612,10 @@ class _Check:
         )
 
     def _jacobian_failure(self, jac: Any, syms: Sequence[Any], c_star: _Exprs) -> None:
-        cycle = " -> ".join(str(syms[i]) for i in _support_cycle(jac))
+        cycle = _keep(" -> ".join(str(syms[i]) for i in _support_cycle(jac)))
         where = (
             f"At z = 0 the constant terms are {_fmt(syms, c_star)} and the Jacobian "
-            f"dPhi/dF is {sp.sstr(jac.tolist())}, which is not nilpotent: the "
+            f"dPhi/dF is {_keep(sp.sstr(jac.tolist()))}, which is not nilpotent: the "
             f"dependency cycle {cycle} has no factor z."
         )
         if self.nonnegative:
@@ -629,34 +641,62 @@ class _Check:
         by_support: bool = False,
     ) -> NoReturn:
         s = self.s
-        lines = [message, "  Equations:"]
+        # A short headline, then the details wrapped and indented.
+        headline, _, detail = message.partition(": ")
+        lines = [headline + ".", _wrap(detail[0].upper() + detail[1:]), "  Equations:"]
         lines += [
             f"    {f} = {sp.sstr(phi)}"
             for f, phi in zip(s._unknowns, s._rhs, strict=True)
         ]
         if kind is IllPosedSystemError and self.uses_k:
             if by_support and not self.vanishes_at_1:
-                lines.append(
-                    "  This holds for every integer k >= 1 (no coefficient vanishes "
+                note = (
+                    "This holds for every integer k >= 1 (no coefficient vanishes "
                     "there, so the support of the system does not change)."
                 )
             elif by_support:
-                lines.append(
-                    "  This holds for every integer k >= 2. At k = 1 some "
+                note = (
+                    "This holds for every integer k >= 2. At k = 1 some "
                     "coefficients vanish, so k = 1 is not covered: use "
                     "specialize(1) to check it."
                 )
             else:
-                lines.append(
-                    "  This holds for symbolic k; finitely many values of k may "
+                note = (
+                    "This holds for symbolic k; finitely many values of k may "
                     "behave differently."
                 )
+            lines.append(_wrap(note))
         raise kind("\n".join(lines))
+
+
+_NBSP = "\u00a0"  # keeps formulas such as "F(0) = 0" on one line when wrapping
+
+
+def _keep(text: str) -> str:
+    """Make the spaces in ``text`` unbreakable for :func:`_wrap`."""
+    return text.replace(" ", _NBSP)
+
+
+def _wrap(text: str) -> str:
+    """Wrap a message paragraph at 78 columns, indented by two spaces."""
+    # Keep citations such as "Thm 5.5" and "Def. 5.3" on one line.
+    text = re.sub(r"\b(Thm|Def\.) (\d)", rf"\1{_NBSP}\2", text)
+    wrapped = textwrap.fill(
+        text,
+        width=78,
+        initial_indent="  ",
+        subsequent_indent="  ",
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+    return wrapped.replace(_NBSP, " ")
 
 
 def _fmt(syms: Sequence[Any], values: _Exprs) -> str:
     return (
-        ", ".join(f"{f}(0) = {sp.sstr(v)}" for f, v in zip(syms, values, strict=True))
+        ", ".join(
+            _keep(f"{f}(0) = {sp.sstr(v)}") for f, v in zip(syms, values, strict=True)
+        )
         or "(none)"
     )
 
