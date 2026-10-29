@@ -462,7 +462,7 @@ Well-posed. Each test checks the fields, `polynomials()` (generators, domain and
 |---|---|---|
 | linear `F = 1 + 2 z F` | yes | `1` |
 | Catalan `F = 1 + z F^2` | yes | `1` |
-| Motzkin `F = 1 + z F + z F^2` | yes | `1` |
+| Motzkin `F = 1 + z F + z^2 F^2` | yes | `1` |
 | leaves `F = z + F^2` | yes | `0` |
 | two equations `F = 1 + z G`, `G = 1 + z F^2` | yes | `(1, 1)` |
 | PSS Example 8 `Y1 = 1 + z Y1`, `Y2 = 1 + Y1^2` | yes | `(1, 2)` |

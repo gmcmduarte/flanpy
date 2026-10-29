@@ -39,7 +39,7 @@ TWO_STEP = {F: z + 1 - (F - 1) ** 2 * (F - 2) / 2}
 WELL_POSED = [
     ("linear", {F: 1 + 2 * z * F}, None, (1,), True),
     ("catalan", {F: 1 + z * F**2}, None, (1,), True),
-    ("motzkin", {F: 1 + z * F + z * F**2}, None, (1,), True),
+    ("motzkin", {F: 1 + z * F + z**2 * F**2}, None, (1,), True),
     ("leaves", {F: z + F**2}, None, (0,), True),
     ("two-equations", {F: 1 + z * G, G: 1 + z * F**2}, None, (1, 1), True),
     # Pivoteau, Salvy & Soria 2012, Example 8 (well founded).
