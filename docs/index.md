@@ -31,6 +31,14 @@ are implemented so far, and the public API is not stable.
 The methods follow {cite:t}`broda-2020-sigact` and
 {cite:t}`broda-2014-hitchhiker`.
 
+## User guide
+
+```{toctree}
+:maxdepth: 1
+
+guide/system
+```
+
 ## Running examples
 
 Each example is a Python script in `examples/` (run it with `python examples/<name>.py`)
