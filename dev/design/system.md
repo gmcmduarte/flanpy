@@ -1,6 +1,7 @@
 # Design note: `System`
 
-Status: draft for approval (build-order step 1, chunk 1). 2026-10-29.
+Status: approved with changes (chunk 1); updated after reading Pivoteau–Salvy–Soria and
+implemented in `src/flanpy/_system.py` (chunk 2). 2026-10-29.
 
 ## 1. Purpose
 
@@ -30,8 +31,16 @@ does no other computation.
   printed book: Def. I.7 (p. 33), the semantics of recursion by iteration from the empty
   class (pp. 32–33), Def. V.8 (p. 357), eq. (61) (p. 482), Def. VII.5 / Thm VII.5
   (p. 483), §VII.6.3 a-properness (p. 489), eq. (77) (p. 494).
+- Pivoteau, Salvy, Soria, *Algorithms for combinatorial structures: Well-founded systems
+  and Newton iterations*, J. Combin. Theory Ser. A 119(8) (2012) 1711–1773,
+  doi:10.1016/j.jcta.2012.05.007 (checked on Crossref). Read from arXiv:1109.2688v2;
+  **page numbers below are from that arXiv version**. Numbering of definitions, theorems
+  and algorithms is assumed to match the journal, but the journal text was not checked.
+  Used: Def. 3.5, Lemma 3.4, Algorithm 0-coord (p. 14), Thm 3.6 and Example 4 (p. 15),
+  Prop. 4.2 (p. 16), Prop. 4.5 (p. 18), Def. 5.3, Def. 5.4, Thm 5.5 (p. 21), Algorithm
+  isWellFounded and Example 8 (p. 22), Thm 5.7 (p. 23).
 
-Transcriptions were checked in a throwaway script (not committed). For `k = 1, 2` and
+Transcriptions were checked with `dev/spikes/broda2020_enumerate.py`. For `k = 1, 2` and
 `n <= 7`, brute-force enumeration of the objects described in Section 3 gives the same
 counts as iterating the transcribed systems: `R`, `S`, `B`, `B̄`, `M`, `M̄` and `L` all
 match. The series `L_k(z)` from the transcribed `L_k` system satisfies eq. (17) modulo
@@ -143,7 +152,7 @@ Check values (from the system, symbolic `k`): `[z^1..z^5] L_k = k, 2k, 4k^2, 24k
   The generators are ordered `(F_1..F_m, z, k)`, with `k` last as fixed in CLAUDE.md.
   `elimination` reorders the unknowns as it needs.
 
-Restricting to `Q[k]` makes the validity of the system independent of `k` (Section 5.4). It
+Restricting to `Q[k]` makes the validity of the system independent of `k` (Section 5.7). It
 also keeps `series` coefficients in `Q[k]` (Section 9). Rational functions of `k` can be
 added once `kset` exists, because they bring exceptional values of `k`. Combinatorial
 inputs do not need them: `k` enters as a multiplicity (`k z`).
@@ -152,121 +161,207 @@ Constructions that are not polynomial, such as `SEQ` (`1/(1 − A)`), must be wr
 auxiliary unknown (e.g. `S = 1 + A S`). The future `symbolic` module will do this
 automatically.
 
-## 5. Validation: well-foundedness
+## 5. Validation: well-posedness
 
-### 5.1 What F&S give
+### 5.1 Definitions
 
-- **Semantics** (pp. 32–33, Def. I.7): a recursive specification means the limit of the
-  iteration `y^(0) = 0`, `y^(h+1) = Phi(z, y^(h))`.
-- **Linear systems** (Def. V.8, p. 357): a transfer matrix `T(z)` is *proper* if `T(0)`
-  is nilpotent.
-- **Polynomial systems** (§VII.6.3, p. 489, condition (ii) "a-properness"): `Phi` is a
-  contraction for the metric `d(u, v) = 2^(−val(u − v))`. Then the system has a unique
-  solution in `C[[z]]^m`, which is the limit of the iteration above. For polynomial `Phi`
-  this holds **iff `Phi(0, y)` does not depend on `y`** (our derivation: if a monomial
-  with no `z` contains some `y_j`, constant vectors `y, y'` give `val(Phi(y) − Phi(y')) = 0`).
+- **Well-posed** (the project's definition): the iteration `F^(0) = 0`,
+  `F^(n+1) = Phi(z, k, F^(n))` converges in the `z`-adic topology of `Q[k][[z]]^m`. The
+  limit is the solution, and it is what `series` computes. This is F&S's semantics of
+  recursion (pp. 32–33, Def. I.7).
+- **Non-negative system**: every coefficient of every `Phi_i`, as a polynomial in
+  `(F, z, k)` (with `k` a variable), is `>= 0`. Otherwise the system is **signed**.
+  All Broda 2020 systems in Section 3 are non-negative: their coefficients are 1, 2, 4,
+  and `k` and `k + 1` expand to monomials with coefficient 1.
+- **Zero coordinate**: an unknown whose iterates are all 0.
+- `System` raises `IllPosedSystemError` **only when ill-posedness is proven**. Anything
+  else it cannot settle raises `UndecidedSystemError` (Section 6).
 
-Strict a-properness is too strong for us. It rejects two systems we must accept:
+### 5.2 What the literature gives
 
-- `F = z + F^2` (binary trees counted by leaves). Here `Phi(0, F) = F^2`. The system has two
-  power-series solutions, `C(z)` and `1 − C(z)`, so "unique power-series solution" is
-  the wrong requirement. The iteration from `0` picks out `C(z)`.
-- Broda's `L = M + M̄` (eq. (12)). The `L` equation has no factor `z`.
+- F&S Def. V.8 (p. 357, linear systems: `T(0)` nilpotent) and §VII.6.3 a-properness
+  (p. 489). A-properness amounts to "`Phi(0, F)` does not depend on `F`". That is too strict:
+  it rejects `F = z + F^2` and Broda's `L = M + M̄` (eq. (12)). Note also that "unique
+  power-series solution" is the wrong requirement: `F = z + F^2` has two such solutions.
+- **PSS** work with species, i.e. non-negative systems. Def. 5.3 (p. 21): a system is
+  *well founded* if the iteration is well defined (automatic for polynomials), converges,
+  and its limit has **no zero coordinate**. Two characterisations:
+  - Thm 3.6 (p. 15), for `H(0, 0) = 0`: well founded at 0 iff `∂H/∂Y(0, 0)` is nilpotent
+    and `Y^[m]` has no zero coordinate.
+  - Thm 5.5 (p. 21), in general: through the companion system
+    `K = H − H(0, 0) + Z1 H(0, 0)` (Def. 5.4), which must be well founded at 0 and have a
+    solution polynomial in `Z1` (Prop. 4.5, p. 18).
 
-### 5.2 The condition `System` enforces
+  Thm 5.7 (p. 23) gives the constant terms: `S(0) = H^m(0, 0)`, the `m`-th iterate.
+  That is an **exact bound of `m` steps**. PSS say nothing about signed systems.
+
+### 5.3 The check `System` runs (with `k` symbolic)
 
 Let `m` be the number of unknowns.
 
-1. **Constant terms stabilise.** Iterate `c^(0) = 0`, `c^(h+1) = Phi(0, k, c^(h))`, exactly
-   in `Q[k]^m`, until `c^(h+1) = c^(h) =: c*`.
-2. **The Jacobian at the origin is nilpotent.** `J0 = ∂Phi/∂F (0, k, c*)` satisfies
-   `J0^m = 0`, as an identity in `Q[k]`.
+0. **Zero coordinates**, by support propagation (PSS Lemma 3.4 and Algorithm 0-coord,
+   p. 14). An unknown is marked non-zero once some monomial of its right-hand side has
+   all its unknowns marked. An unknown that is never marked is 0 in every iterate, for
+   any signs: each monomial of its right-hand side contains an unmarked unknown. For
+   non-negative systems the converse also holds: there is no cancellation, and a
+   non-zero polynomial in `Q≥0[k]` is positive for `k >= 1`.
+   Zero coordinates are set to 0 and dropped. This leaves a reduced system with
+   `m' <= m` unknowns, and a `ZeroCoordinateWarning` names the dropped ones (Section 5.6).
+1. **Constant terms.** Iterate `c^(0) = 0`, `c^(h+1) = Phi(0, k, c^(h))` on the reduced
+   system. Note that `[z^0] F^(h) = c^(h)`.
+   - Non-negative: compute `c^(m')` and `c^(m'+1)`. If they differ, raise
+     `IllPosedSystemError` (PSS Thm 5.7). Otherwise `c* = c^(m')`.
+   - Signed: iterate until stationary (`c*`). If an iterate repeats an earlier one, the
+     sequence cycles, `[z^0]` never settles, and the system is **proven** ill-posed:
+     raise `IllPosedSystemError`. If the private cap `max(32, 4m')` is reached, raise
+     `UndecidedSystemError`.
+2. **Jacobian.** `J0 = ∂Phi/∂F (0, k, c*)` on the reduced system. Test `J0^m' = 0` exactly
+   in `Q[k]`.
+   - Nilpotent: the system is well-posed.
+   - Not nilpotent and non-negative: raise `IllPosedSystemError` (PSS Thm 5.5 with
+     Thm 3.6). The message shows a cycle of the support graph of `J0`. One always
+     exists, because a matrix whose support graph is acyclic is nilpotent.
+   - Not nilpotent and signed: raise `UndecidedSystemError`.
 
-**Claim** (our argument, not a numbered result in F&S): under 1–2, the iteration from 0
-converges in `C[[z]]^m`, and its limit `y` is the unique solution with `y(0) = c*`.
+### 5.4 Why this is correct
 
-*Proof sketch.* Uniqueness: `I − J0` is invertible (unipotent), so the formal implicit
-function theorem applies at `(0, c*)`. Convergence: let `e^(h) = y^(h) − y` and let `ν`
-be the nilpotency index of `J0`. After step 1 is reached, `e^(h)` has zero constant
-term. The coefficient of `z^n` in `e^(h+1)` is `J0` times that of `e^(h)`, plus terms that
-involve only coefficients of `e^(h)` of index `< n`. By induction on `n`, coefficient `n` is
-exactly 0 after at most `h_1 + n ν` steps, where `h_1` is the step at which 1 is reached.
+**Sufficiency (any signs).** If steps 1 and 2 pass, the iteration converges, and its
+limit is the unique solution with `F(0) = c*`. For non-negative systems this follows from
+PSS. For signed systems PSS do not apply, so we rely on our own argument:
 
-This generalises the F&S cases. Def. V.8 is the linear case `Phi = T(z) F + b(z)`, where
-`J0 = T(0)`. Strict a-properness is the case `J0 = 0` with `c* = Phi(0, 0)`.
+*Proof sketch (signed case).* Uniqueness: `I − J0` is unipotent, hence invertible, so the
+formal implicit function theorem applies at `(0, c*)`. Convergence: let
+`e^(h) = F^(h) − F` and let `ν` be the nilpotency index of `J0`. Once step 1 is reached,
+at some step `h_1`, `e^(h)` has zero constant term. The coefficient of `z^n` in
+`e^(h+1)` is `J0` times that of `e^(h)`, plus terms that involve only coefficients of
+`e^(h)` of index `< n`. By induction on `n`, coefficient `n` is exactly 0 after at most
+`h_1 + n ν` steps. Zero coordinates are 0 in every iterate, so the reduction does not
+change convergence.
 
-The check is conservative. It rejects some degenerate systems whose iteration happens to
-converge, e.g. `{F = z + 2G, G = 2G}`, which has `J0` not nilpotent and `G ≡ 0`. For
-a-positive systems we expect it to be necessary as well, but that is **not proved here**.
-Pivoteau–Salvy–Soria (JCTA 2012, "Algorithms for combinatorial structures: Well-founded
-systems and Newton iterations") treat this question. That reference is from memory and
-was **not checked**. Do not cite it until verified.
+**Necessity (non-negative systems).** Suppose the reduced system's iteration converges.
+Then the reduced system is PSS-well-founded (Def. 5.3):
 
-### 5.3 The bound on step 1
+- it is well defined, because it is polynomial;
+- it has no zero coordinate, by step 0;
+- its species iteration converges. To see this, replace every positive coefficient by 1
+  to get a species with the same structures. A weighted coefficient
+  `[z^n] F_i^(h)` is a sum of positive weights over the structures of size `n` built
+  by step `h`, so it is stationary iff that set of structures is stationary.
 
-`m` iterations are **not** enough in general. `F = z + 1 − (F − 1)^2 (F − 2)/2` has
-`m = 1`, but its constant terms go `0 → 2 → 1 → 1`, so they stabilise only after 2 steps,
-and `J0 = 0`. For that reason step 1 iterates up to a private cap, initially `max(32, 4m)`.
-If the cap is reached, construction fails with an **undecided** message. It does not say
-"ill-posed". The cap is not public API; see Open questions.
+Then:
 
-### 5.4 Role of `k`
+- Thm 5.7 gives `c* = c^(m')`, i.e. step 1 within `m'` iterations.
+- Thm 5.5, condition 2, via Prop. 4.5(2), gives that `∂K/∂Y(Z1, 0, S0(Z1))` is nilpotent.
+  Setting `Z1 = 1` gives `J0`, because `K(1, 0, Y) = H(0, Y)` and `S0(1) = c*`. A
+  specialisation of a nilpotent matrix is nilpotent.
 
-Both checks are polynomial identities in `Q[k]`. Identities survive substitution, so a
-system that passes for symbolic `k` passes for **every** `k ∈ Z≥0`. No `KSet` is needed
-here. If check 2 fails for symbolic `k`, the error message lists the non-negative
-integers `k` for which `J0` is nilpotent. These are the common non-negative integer roots of
-the coefficients of `det(λI − J0) − λ^m`. The user can substitute one of those values and
-build the system again.
+So a non-negative system that fails step 1 or 2 is proven ill-posed.
 
-### 5.5 Error messages
+**Signed failures.** Only the cycle case is a proof. Example of why the other failures
+prove nothing: `{F = z + 2G, G = 2G}` converges (`G ≡ 0`), yet `J0` restricted to `G` is
+`[[2]]`. Step 0 catches this particular case, but in general a signed system that fails
+the check may still converge.
 
-All of these raise `flanpy.IllPosedSystemError` (a subclass of `ValueError`).
+### 5.5 Iteration counts
 
-`F = F + z`:
+The signed example `F = z + 1 − (F − 1)^2 (F − 2)/2` (expanded:
+`F = z + 2 − 5F/2 + 2F^2 − F^3/2`) has `m = 1`. Its constant terms go `0 → 2 → 1 → 1`, so
+they need 2 steps, and `J0 = 0`. No bound like PSS Thm 5.7 holds for signed systems, so
+they need the cap. Non-negative systems need no cap.
+
+### 5.6 Zero coordinates: accept with a warning
+
+PSS exclude zero coordinates by definition (Def. 5.3; Example 4, p. 15: `Y = Y`,
+`Y = Y + ZY`, `Y = ZY`). We **accept them with a `ZeroCoordinateWarning`**, for three
+reasons:
+
+- under the project's definition their iteration converges (to 0);
+- CLAUDE.md says to start with warnings;
+- specialising a valid system can create them, so rejecting them would break
+  "generic pass ⇒ pass for every `k`" (Section 5.7). For example, the Broda `L_k` system
+  at `k = 0` is identically 0 in all five unknowns.
+
+`series` treats them as 0.
+
+### 5.7 Role of `k`
+
+Every computation in steps 0–2 is done exactly in `Q[k]`: support propagation, the
+iterates `c^(h)`, stationarity, and `J0^m' = 0`.
+
+**A generic pass implies a pass for every `k`.** Evaluation at `k = k_0` is a ring
+homomorphism `Q[k] → Q`, and it commutes with the polynomial operations used. So the
+iterates of the specialised system are the specialised iterates. The identities
+`c^(h+1) = c^(h)` and `J0^m' = 0`, and any zero coordinate, all stay true. More directly,
+the whole iteration in `Q[k][[z]]` specialises, so `z`-adic convergence for symbolic `k`
+gives convergence for each `k_0`. This is why `System` needs no `KSet`. Specialising can
+only *add* zero coordinates, which give warnings, never errors.
+
+**A failure is a statement about symbolic `k`.**
+
+- Non-negative case: it holds for **every integer `k >= 1`**. There every non-zero
+  coefficient stays positive, so the supports are unchanged, and the strict inequality
+  `c^(m'+1) ≠ c^(m')` survives because the difference has non-negative coefficients.
+  `k = 0` can change the support (e.g. `F = kF + z` is well-posed at `k = 0`), and the
+  message says so.
+- Signed cycle: it holds for all but finitely many `k`.
+
+The check never samples values of `k`.
+
+### 5.8 Messages
+
+Actual output of the implementation.
 
 ```
-flanpy.IllPosedSystemError: the system is not well-founded: the Jacobian dPhi/dF at z = 0 is not nilpotent.
+flanpy.IllPosedSystemError: the system is ill-posed: the iteration from 0 does not converge. At z = 0 the constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[1]], which is not nilpotent: the dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau, Salvy & Soria 2012, Thm 5.5 and Thm 3.6.)
+  Equations:
     F = F + z
-  At z = 0: F(0) = 0, Jacobian = [[1]].
-  The dependency cycle F -> F has no factor z, so iterating F <- Phi(F) from 0 never
-  fixes the coefficients of the solution.
-```
 
-A cycle can always be shown, because a matrix whose support graph is acyclic is
-nilpotent.
-
-`F = 1 + F` (undecided case):
-
-```
-flanpy.IllPosedSystemError: could not establish that the system is well-founded: the constant
-terms F(0) did not stabilise under F(0) <- Phi(0, F(0)) within 32 iterations from 0.
+flanpy.IllPosedSystemError: the system is ill-posed: the constant terms do not stabilise, so the iteration does not converge. After 1 iteration(s) F(0) = 1, after 2: F(0) = 2. A convergent system with non-negative coefficients reaches its constant terms within 1 iteration(s) (Pivoteau, Salvy & Soria 2012, Thm 5.7).
+  Equations:
     F = F + 1
-  Last two iterates: F(0) = 31, then F(0) = 32.
-```
 
-`F = k F + z`:
-
-```
-flanpy.IllPosedSystemError: the system is not well-founded for symbolic k: the Jacobian dPhi/dF at z = 0 is not nilpotent.
+flanpy.IllPosedSystemError: the system is ill-posed: the iteration from 0 does not converge. At z = 0 the constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[k]], which is not nilpotent: the dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau, Salvy & Soria 2012, Thm 5.5 and Thm 3.6.)
+  Equations:
     F = F*k + z
-  At z = 0: F(0) = 0, Jacobian = [[k]].
-  The Jacobian is nilpotent only for k in {0}; substitute such a value before building the System.
+  This holds for every integer k >= 1 (the coefficients keep their signs there). k = 0 changes the support of the system and is not covered: substitute k = 0 to check it.
+
+flanpy.IllPosedSystemError: the system is ill-posed: the constant terms cycle, so the coefficient of z^0 never settles and the iteration does not converge: F(0) = 0 -> F(0) = 1 -> F(0) = 0.
+  Equations:
+    F = 1 - F
+
+flanpy.UndecidedSystemError: could not decide whether the system is well-posed: it has negative coefficients, and the nilpotency test fails. At z = 0 the constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[-1]], which is not nilpotent: the dependency cycle F -> F has no factor z. For systems with negative coefficients this failure does not prove divergence.
+  Equations:
+    F = -F + z
+
+flanpy.UndecidedSystemError: could not decide whether the system is well-posed: it has negative coefficients, and its constant terms did not stabilise within 32 iterations from 0 (last two: F(0) = 31, then F(0) = 32).
+  Equations:
+    F = -F**2*z + F + 1
+
+flanpy.ZeroCoordinateWarning: the solution has zero coordinates: F is identically 0 (every iterate from 0 is 0) and kept as 0. Pivoteau, Salvy & Soria (2012, Def. 5.3) exclude such systems. Remove this unknown if this is not intended.
 ```
 
-Malformed input raises `ValueError` or `TypeError`, not `IllPosedSystemError`. The
-messages name the offending equation, e.g.:
-
-```
-ValueError: the right-hand side for F is not a polynomial in (F, z, k) with rational
-coefficients: 1/(-F*z + 1). Write SEQ-like terms with an auxiliary unknown, e.g. S = 1 + z*F*S.
-```
+Malformed input raises `ValueError` or `TypeError`, naming the offending equation. For
+example, a non-polynomial right-hand side such as `1/(1 − zF)` gets a hint to use an
+auxiliary unknown for `SEQ`. A stray symbol gets either "marking variables are not
+supported yet" or, if it has the name of an unknown, of `z` or of `k`, a hint about SymPy
+assumptions.
 
 ## 6. Public API
 
-Public names: `flanpy.System` and `flanpy.IllPosedSystemError`. The implementation lives in
-a private module `src/flanpy/_system.py`, re-exported from `flanpy/__init__.py`. That keeps
-the import path stable if the internals move.
+Public names, all reporting `flanpy` as their module:
+
+```
+flanpy.System
+flanpy.WellPosednessError(ValueError)    # base: the check did not pass
+├── flanpy.IllPosedSystemError           # proven: the iteration does not converge
+└── flanpy.UndecidedSystemError          # not decided; never a claim of ill-posedness
+flanpy.ZeroCoordinateWarning(UserWarning)
+```
+
+The common base lets callers catch "rejected for any reason" with one clause, while the
+two outcomes stay distinct. It subclasses `ValueError` because the constructor's argument
+is rejected. The implementation lives in the private module `src/flanpy/_system.py` and
+is re-exported from `flanpy`.
 
 ```python
 class System:
@@ -278,127 +373,120 @@ class System:
         k: sympy.Symbol | None = None,
     ) -> None: ...
 
+    # In the order of the input mapping.
     @property
-    def unknowns(self) -> tuple[sympy.Symbol, ...]: ...        # mapping order
+    def unknowns(self) -> tuple[sympy.Symbol, ...]: ...
+
+    # Read-only, F_i -> Phi_i (expanded).
     @property
-    def equations(self) -> Mapping[sympy.Symbol, sympy.Expr]: ...  # read-only, F_i -> Phi_i (expanded)
+    def equations(self) -> Mapping[sympy.Symbol, sympy.Expr]: ...
+
     @property
     def z(self) -> sympy.Symbol: ...
+
     @property
     def k(self) -> sympy.Symbol | None: ...
 
-    def polynomials(self) -> tuple[sympy.Poly, ...]: ...      # F_i - Phi_i over QQ, gens (*unknowns, z, k)
-    def specialize(self, k: int) -> System: ...                # k >= 0; result has k = None
+    # F_i - Phi_i over QQ, generators (*unknowns, z, k).
+    def polynomials(self) -> tuple[sympy.Poly, ...]: ...
 
-    # __eq__, __hash__, __repr__ (content-based; System is immutable)
-```
+    # k >= 0; the result has k = None.
+    def specialize(self, k: int) -> System: ...
 
-Example (doctest in the class docstring):
-
-```python
->>> from sympy import symbols
->>> from flanpy import System
->>> z, k, R = symbols("z k R")
->>> System({R: (k + 1)*z + 2*z*R**2 + z*R}, z=z, k=k)   # Broda et al. 2020, from grammar (1)
-System({R: 2*R**2*z + R*z + k*z + z}, z=z, k=k)
+    # __eq__, __hash__, __repr__ (content-based); immutable; picklable
 ```
 
 Input rules:
 
-- `unknowns`, `z` and `k` are distinct `sympy.Symbol`s. Symbols with different assumptions
-  (`Symbol("z")` and `Symbol("z", positive=True)`) are different symbols in SymPy, and the
-  docstring will warn about this.
-- `Phi_i` uses only the unknowns, `z` and `k`. Any other symbol is rejected with a message
-  saying that marking variables are not supported yet.
-- Coefficients are exact rationals. Floats are rejected (the "exact first" rule).
-- At least one equation. `k=None` is allowed, e.g. for Catalan. A `k` that is given but
-  unused is fine.
-- `specialize(k)` requires an `int >= 0` and a system with `k` set. It returns a validated
-  `System` without `k`.
+- `unknowns`, `z` and `k` are distinct `sympy.Symbol`s, with distinct names (see the
+  assumptions hint in Section 5.8).
+- `Phi_i` uses only the unknowns, `z` and `k`. Coefficients are exact rationals; floats
+  and irrational constants are rejected.
+- There is at least one equation. `k=None` is allowed, and a `k` that is given but unused is fine.
+- `specialize(k)` requires an `int >= 0` (not `bool`) and a system with `k` set.
 
-## 7. Private, computed at construction and cached
+## 7. Private, computed at construction
 
-- `_constant_terms: tuple[Expr, ...]` (`c*`), `_jacobian0: Matrix` (`J0`),
-  `_nilpotency_index: int` (`ν`).
-- `_strictly_proper: bool` (F&S a-proper, `Phi(0, y)` free of `y`). This is informative
-  only.
-- Internally the parameters are kept as a tuple `_params` (currently `(k,)` or `()`). The
-  validation code treats every parameter the same way, so marking variables can join that
-  tuple later without changing it (Section 8).
+- `_active: tuple[int, ...]`: the indices of the unknowns that are not zero coordinates.
+- `_constant_terms: tuple[Expr, ...]`: `c*` for all `m` unknowns, 0 for zero coordinates.
+- `_jacobian0: Matrix` and `_nilpotency_index: int`: `J0` and `ν` on the **reduced**
+  system, of size `m' × m'`.
+- `_nonnegative: bool`.
+- `_params`: currently `(k,)` or `()`. Everything is computed identically for every
+  parameter, so marking variables can join later (Section 8).
+- `_signed_cap(m)`: the private iteration cap. It is a function so that tests can
+  monkeypatch it.
+
+The F&S-strict flag proposed in chunk 1 was dropped, because nothing uses it.
 
 ## 8. Room for marking variables (later; not designed here)
 
 Cost generating functions need extra variables `u` that appear polynomially in `Phi`,
 e.g. eq. (14) has `k u z`. They will be accepted through a keyword such as `markers=(u,)`,
-stored in `_params`, and validated identically in them, exactly like `k`. An operation
-then derives from a `System` with marker `u` the augmented system for
-`(F, ∂_u F |_{u=1})`, as in eqs. (13)–(14) → (15)–(16). Nothing in Sections 4–7 depends
-on there being only one parameter.
+stored in `_params`, and validated identically in them, exactly like `k`. Section 5.7
+applies to them unchanged. An operation then derives from a `System` with marker `u` the
+augmented system for `(F, ∂_u F |_{u=1})`, as in eqs. (13)–(14) → (15)–(16).
 
 ## 9. What `series` will need from `System`
 
-`series` computes coefficients `[z^0..z^N]` of every unknown, either for symbolic `k` or
-after `specialize(k)`. It needs:
-
-- the ordered unknowns and `Phi` as sparse polynomials;
-- `c*` and `J0`.
+`series` computes the coefficients `[z^0..z^N]` of every unknown, either for symbolic `k`
+or after `specialize(k)`. It needs the ordered unknowns, `Phi`, `_active` (zero
+coordinates are 0), `c*` and `J0`.
 
 With those, coefficients can be computed one at a time by a linear solve,
-`(I − J0) y_n = r_n(y_0..y_{n−1})`, or by Newton iteration. Because `I − J0` is unipotent
-over `Q[k]`, its inverse has entries in `Q[k]`, so all coefficients stay in `Q[k]` (no
-denominators in `k`). A naive fixed-point iteration also works, with at most `ν` passes
-per new coefficient (Section 5.2). `series` gets its own design note in chunk 3.
+`(I − J0) y_n = r_n(y_0..y_{n−1})`, or by Newton iteration (PSS Thm 8.10). Because
+`I − J0` is unipotent over `Q[k]`, all coefficients stay in `Q[k]`. A naive fixed-point
+iteration also works, with at most `ν` passes per new coefficient (Section 5.4).
+`series` gets its own design note in chunk 3.
 
-## 10. Planned tests (`tests/test_system.py`)
+## 10. Tests (`tests/test_system.py`)
 
-Well-posed. Each test checks construction, `unknowns`, `equations`, `polynomials()` (with
-the generators and domain) and the private `c*`, `J0` and strictness flag:
+Well-posed. Each test checks the fields, `polynomials()` (generators, domain and value),
+`c*`, the non-negativity flag, and that `J0` is nilpotent.
 
-| system | strictly a-proper | `c*` |
+| system | non-negative | `c*` |
 |---|---|---|
 | linear `F = 1 + 2 z F` | yes | `1` |
 | Catalan `F = 1 + z F^2` | yes | `1` |
 | Motzkin `F = 1 + z F + z F^2` | yes | `1` |
-| leaves `F = z + F^2` | no | `0` |
+| leaves `F = z + F^2` | yes | `0` |
 | two equations `F = 1 + z G`, `G = 1 + z F^2` | yes | `(1, 1)` |
+| PSS Example 8 `Y1 = 1 + z Y1`, `Y2 = 1 + Y1^2` | yes | `(1, 2)` |
 | Broda `R_k` (Section 3.1) | yes | `0` |
 | Broda `R_k, S_k` (Section 3.2) | yes | `(0, 0)` |
-| Broda `L_k` (Section 3.3, five unknowns) | no (`L = M + M̄`) | `0` |
-| `F = z + 1 − (F−1)^2 (F−2)/2` (2-step stabilisation) | no | `1` |
+| Broda `L_k` (Section 3.3, five unknowns) | yes | `0` |
+| `F = z + 1 − (F−1)^2 (F−2)/2` | no | `1` |
+
+Zero coordinates (accepted, with a warning): `F = F`, `F = zF`, `F = F + zF` (PSS
+Example 4), `{F = z + G, G = G}`, `{F = FG, G = zF}`, and Broda `L_k` specialised to
+`k = 0`.
+
+Ill-posed (`IllPosedSystemError`; the test matches key phrases of the message):
+`F = F + z`, `F = z + F + F^2`, `{F = G + z, G = F}`, `F = 1 + F`, `F = 1 + F^2`,
+`F = kF + z` ("every integer k >= 1"), PSS Example 8 `{Y1 = 1 + Y2 Y1, Y2 = 1}`, and the
+signed cycle `F = 1 − F`.
+
+Undecided (`UndecidedSystemError`, and not `IllPosedSystemError`):
+
+- the two-step signed example with the cap forced to 1 (monkeypatched);
+- `F = F + 1 − z F^2`, where the cap is reached;
+- `F = z − F`, a signed system whose `J0` is not nilpotent.
 
 Also:
 
-- `specialize(k)` for `k = 0, 1, 2` on the Broda systems. The result has no `k` and
-  `polynomials()` changes accordingly.
-- Equality and hashing are by content; the object is immutable.
-- A doctest in the docstring (shown in Section 6).
-
-Ill-posed: each must raise `IllPosedSystemError`, and the test matches key phrases of the
-message.
-
-- `F = F + z`, `F = F` (Jacobian `[[1]]`, cycle `F -> F`)
-- `F = z + F + F^2` (Jacobian `[[1]]`)
-- `{F = G + z, G = F}` (cycle `F -> G -> F`)
-- `F = 1 + F`, `F = 1 + F^2` (undecided: constant terms do not stabilise)
-- `F = k F + z` (nilpotent only for `k in {0}`)
-
-Malformed input (must raise `ValueError` / `TypeError`):
-
-- non-polynomial right-hand sides: `1/(1 − z F)`, `sqrt(z)`, `exp(z)`;
-- a float coefficient (`0.5*z`); a stray symbol (`u`, with the markers message);
-- an unknown equal to `z` or `k`; an empty mapping; a non-`Symbol` key; `k` not a `Symbol`;
-- `specialize(-1)`, `specialize(2.0)`, and `specialize` on a system without `k`.
-
-Out of scope here: `series` coefficients and brute-force enumeration. Those tests belong to
-`series` (chunk 3 onwards), which will use the objects described in Section 3 and the check
-values given there.
+- `specialize(k)` for `k = 1, 2, 7` on the Broda systems;
+- malformed input, with 16 cases;
+- `specialize` errors;
+- value semantics: equality, hashing, order sensitivity, pickling and immutability;
+- `repr`, and the public names;
+- doctests in the `System` docstring (Catalan, Broda `R_k`, `F = F + z`).
 
 ## 11. Non-goals and open questions
 
 - No construction from implicit polynomial equations (`P(z, F) = 0` not in fixed-point
-  form). Well-foundedness cannot be checked there. Revisit if a paper needs it.
+  form). Revisit if a paper needs it.
 - No `Q(k)` coefficients until `kset` exists (Section 4).
-- The private iteration cap for step 1 (Section 5.3): is a heuristic cap with an
-  "undecided" error acceptable, or should the cap be public?
-- Should the `F&S`-strict flag (`_strictly_proper`) become public later? Current proposal:
-  no.
+- Signed systems: a sharper decision procedure is possible but not planned. For example,
+  periodicity of the order-1 coefficients when `J0` is not nilpotent would prove more
+  cases ill-posed.
+- PSS page numbers are from arXiv v2. Check the journal pagination if a citation needs it.
