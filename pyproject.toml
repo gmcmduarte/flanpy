@@ -51,6 +51,7 @@ docs = [
 ]
 
 [project.urls]
+Documentation = "https://flanpy.readthedocs.io/"
 Repository = "https://github.com/gmcmduarte/flanpy"
 Issues = "https://github.com/gmcmduarte/flanpy/issues"
 

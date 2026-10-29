@@ -30,6 +30,10 @@ From a clone, for development:
 pip install -e ".[dev,docs]"
 ```
 
+## Documentation
+
+<https://flanpy.readthedocs.io/>
+
 ## Licence
 
 GPL-3.0-or-later. See [LICENSE](LICENSE). If you use flanpy in research,
