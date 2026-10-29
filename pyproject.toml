@@ -68,7 +68,12 @@ include = [
     "/CITATION.cff",
     "/CONTRIBUTING.md",
 ]
-exclude = ["/docs/_build"]
+# docs/examples is a symlink to examples/; ship the real files only (hatch would
+# otherwise keep one copy, under docs/examples).
+exclude = ["/docs/_build", "/docs/examples"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"examples" = "examples"
 
 # --- ruff -------------------------------------------------------------------
 
