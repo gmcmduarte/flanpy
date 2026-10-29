@@ -78,12 +78,12 @@ These are the ground truth; the package is not "done" for a feature until its te
 
 All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` layout). Version is static in `pyproject.toml`; `pyflan.__version__` reads it from the installed metadata.
 
-- **Extras**: `fast` (python-flint), `dev` (pytest, ruff, mypy, build), `docs` (sphinx, shibuya, myst-parser, myst-nb, sphinxcontrib-bibtex).
+- **Extras**: `fast` (python-flint), `dev` (pytest, ruff, mypy, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, sphinxcontrib-bibtex).
 - **Types**: `mypy --strict` (chosen over pyright: Python-native, no Node dependency). Tests are type-checked but may omit annotations.
 - **Lint/format**: `ruff` with pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, RUF and pydocstyle (NumPy convention). `dev/spikes/` is excluded (throwaway code).
 - **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/pyflan`; warnings are errors.
 - **SPDX**: every `.py` file starts with `# SPDX-License-Identifier: GPL-3.0-or-later`.
-- **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 and `3.x`, plus a docs job (`sphinx-build -W`). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
+- **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 and `3.x`, plus a docs job (`sphinx-build -W` for HTML, then the `doctest` builder). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
 - **Repo files**: `README.md`, `CITATION.cff`, `CONTRIBUTING.md`, `docs/refs.bib` (DOIs checked against Crossref).
 
 Commands (from the repo root, in a Python 3.13 venv):
@@ -94,7 +94,9 @@ pytest                               # tests + doctests
 ruff check . && ruff format --check .
 mypy                                 # strict, src + tests
 sphinx-build -W --keep-going docs docs/_build/html
+sphinx-build -W --keep-going -b doctest docs docs/_build/doctest
 python -m build                      # sdist + wheel into dist/
+twine check dist/*                   # release metadata check
 ```
 
 ### Documentation (decided)
@@ -106,12 +108,13 @@ python -m build                      # sdist + wheel into dist/
 - **`intersphinx`** to link to SymPy / Python / mpmath docs.
 - **`sphinxcontrib-bibtex`** to cite the papers from a `.bib` file.
 - **`doctest`** (and executed notebooks) so the docs fail to build if a paper's number stops reproducing.
-- Hosting: Read the Docs or GitHub Pages, built by CI. HTML is the primary output.
+- Hosting: Read the Docs (decided 2026-10-29; the repository is public), configured by `.readthedocs.yaml`. CI also builds the docs and runs the Sphinx doctest builder. HTML is the primary output.
 - Docs grow with the code: every feature lands with its docstring (naming the theorem or paper equation implemented) and a worked example in the same change.
 
 ## Open items
 
 - [x] Tooling: pytest, ruff, mypy (strict) set up. Shibuya 2026.7.12 builds cleanly with Sphinx 9.2.0 on Python 3.13 (`-W`, no warnings); tests and mypy also pass on Python 3.15.
-- Docs hosting: `.readthedocs.yaml` exists, but the Read the Docs project is not connected yet (or use GitHub Pages instead).
-- `pyflan` was free on PyPI on 2026-10-29; reserve it (e.g. by publishing an early release) when convenient.
+- Read the Docs: import the GitHub project on readthedocs.org (needs the maintainer's RTD account); `.readthedocs.yaml` is ready.
+- PyPI: `pyflan` was free on 2026-10-29; reserve it by uploading `0.0.1.dev0` manually with `twine` (maintainer's token).
+- PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
 - Remaining technical risk: roots of characteristic polynomials that are not expressible in radicals (see Decisions), and Case I curves with larger systems, where the Groebner step may be slow. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.
