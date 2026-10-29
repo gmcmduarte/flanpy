@@ -43,22 +43,90 @@ class WellPosednessError(ValueError):
 
     Base class of :class:`IllPosedSystemError` (proven ill-posed) and
     :class:`UndecidedSystemError` (not decided).
+
+    Examples
+    --------
+    One ``except`` clause catches both outcomes:
+
+    >>> from sympy import symbols
+    >>> from flanpy import System, WellPosednessError
+    >>> z, F = symbols("z F")
+    >>> try:
+    ...     System({F: 1 + F**2}, z=z)
+    ... except WellPosednessError as error:
+    ...     print(type(error).__name__)
+    IllPosedSystemError
     """
 
 
 class IllPosedSystemError(WellPosednessError):
-    """The system is proven ill-posed: the iteration from 0 does not converge."""
+    """The system is proven ill-posed: the iteration from 0 does not converge.
+
+    Examples
+    --------
+    The Catalan equation without its ``z``, ``F = 1 + F^2``: the constant terms
+    grow forever.
+
+    >>> from sympy import symbols
+    >>> from flanpy import System
+    >>> z, F = symbols("z F")
+    >>> System({F: 1 + F**2}, z=z)
+    Traceback (most recent call last):
+        ...
+    flanpy.IllPosedSystemError: the system is ill-posed.
+      The constant terms do not stabilise, so the iteration does not converge.
+      After 1 iteration(s) F(0) = 1, after 2: F(0) = 2. A convergent system with
+      non-negative coefficients reaches its constant terms within 1 iteration(s)
+      (Pivoteau, Salvy & Soria 2012, arXiv:1109.2688v2, Thm 5.7).
+      Equations:
+        F = F**2 + 1
+    """
 
 
 class UndecidedSystemError(WellPosednessError):
     """The check could not decide whether the system is well-posed.
 
     This is never a claim that the system is ill-posed.
+
+    Examples
+    --------
+    A system with a negative coefficient whose Jacobian at ``z = 0`` is not
+    nilpotent:
+
+    >>> from sympy import symbols
+    >>> from flanpy import System
+    >>> z, F = symbols("z F")
+    >>> System({F: z - F}, z=z)
+    Traceback (most recent call last):
+        ...
+    flanpy.UndecidedSystemError: could not decide whether the system is well-posed.
+      It has negative coefficients, and the nilpotency test fails. At z = 0 the
+      constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[-1]], which is not
+      nilpotent: the dependency cycle F -> F has no factor z. For systems with
+      negative coefficients this failure does not prove divergence.
+      Equations:
+        F = -F + z
     """
 
 
 class ZeroCoordinateWarning(UserWarning):
-    """Some unknowns of a :class:`System` are identically zero."""
+    """Some unknowns of a :class:`System` are identically zero.
+
+    Examples
+    --------
+    >>> import warnings
+    >>> from sympy import symbols
+    >>> from flanpy import System
+    >>> z, F, G = symbols("z F G")
+    >>> with warnings.catch_warnings(record=True) as caught:
+    ...     warnings.simplefilter("always")
+    ...     system = System({F: z + G, G: G}, z=z)
+    >>> print(caught[0].message)
+    G is identically 0 (zero coordinate).
+      Every iterate from 0 is 0 there, so the solution keeps it as 0. Pivoteau,
+      Salvy & Soria (2012, arXiv:1109.2688v2, Def. 5.3) exclude such systems.
+      Remove this unknown if this is not intended.
+    """
 
 
 _Exprs = tuple[Any, ...]  # tuples of sympy expressions (sympy is untyped)
@@ -237,12 +305,32 @@ class System:
 
     @property
     def unknowns(self) -> tuple[sp.Symbol, ...]:
-        """The unknowns ``F_1..F_m``, in the order of the input mapping."""
+        """The unknowns ``F_1..F_m``, in the order of the input mapping.
+
+        Examples
+        --------
+        >>> from sympy import symbols
+        >>> from flanpy import System
+        >>> z, F = symbols("z F")
+        >>> System({F: 1 + z * F**2}, z=z).unknowns
+        (F,)
+        """
         return self._unknowns
 
     @property
     def equations(self) -> Mapping[sp.Symbol, sp.Expr]:
-        """Read-only mapping ``F_i -> Phi_i`` (right-hand sides expanded)."""
+        """Read-only mapping ``F_i -> Phi_i`` (right-hand sides expanded).
+
+        This is the fixed-point form ``F = Phi(z, k, F)``.
+
+        Examples
+        --------
+        >>> from sympy import symbols
+        >>> from flanpy import System
+        >>> z, F = symbols("z F")
+        >>> System({F: 1 + z * F**2}, z=z).equations
+        mappingproxy({F: F**2*z + 1})
+        """
         return MappingProxyType(dict(zip(self._unknowns, self._rhs, strict=True)))
 
     @property
@@ -267,6 +355,18 @@ class System:
         -------
         tuple of sympy.Poly
             One polynomial per unknown, in the order of :attr:`unknowns`.
+
+        Examples
+        --------
+        All regular expressions over ``k`` letters, Broda et al. (2020),
+        grammar (1):
+
+        >>> from sympy import symbols
+        >>> from flanpy import System
+        >>> z, k, R = symbols("z k R")
+        >>> rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
+        >>> rk.polynomials()
+        (Poly(-2*R**2*z - R*z + R - z*k - z, R, z, k, domain='QQ'),)
         """
         gens = (*self._unknowns, self._z, *self._params)
         return tuple(
@@ -295,6 +395,17 @@ class System:
             If the system has no parameter, or ``k < 1``.
         TypeError
             If ``k`` is not an ``int``.
+
+        Examples
+        --------
+        Regular expressions over 2 letters, Broda et al. (2020), grammar (1):
+
+        >>> from sympy import symbols
+        >>> from flanpy import System
+        >>> z, k, R = symbols("z k R")
+        >>> rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
+        >>> rk.specialize(2)
+        System({R: 2*R**2*z + R*z + 3*z}, z=z)
         """
         if self._k is None:
             raise ValueError("the system has no parameter k to specialize")
