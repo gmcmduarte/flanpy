@@ -31,6 +31,14 @@ are implemented so far, and the public API is not stable.
 The methods follow {cite:t}`broda-2020-sigact` and
 {cite:t}`broda-2014-hitchhiker`.
 
+## Examples
+
+```{toctree}
+:maxdepth: 1
+
+examples/series
+```
+
 ## Installation
 
 ```console
