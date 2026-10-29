@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Polynomial systems ``F = Phi(z, k, F)`` and their well-posedness check.
 
-The design is recorded in ``dev/design/system.md``.
+The design is recorded in ``dev/design/system.md``. Pivoteau, Salvy & Soria
+(2012) are cited with the numbering of arXiv:1109.2688v2 (definitions,
+theorems, lemmas, algorithms).
 """
 
 from __future__ import annotations
@@ -25,7 +27,8 @@ __all__ = [
 def _signed_cap(m: int) -> int:
     """Return the iteration cap for the constant terms of a signed system.
 
-    Non-negative systems need no cap: Pivoteau, Salvy & Soria (2012), Thm 5.7,
+    Non-negative systems need no cap: Pivoteau, Salvy & Soria (2012,
+    arXiv:1109.2688v2 numbering), Thm 5.7,
     bound the number of steps by ``m``. Signed systems may need more than ``m``
     steps (see dev/design/system.md, section 5.3), and no bound is known.
     """
@@ -139,7 +142,8 @@ class System:
        University Press, 2009.
     .. [2] C. Pivoteau, B. Salvy and M. Soria, "Algorithms for combinatorial
        structures: Well-founded systems and Newton iterations", *J. Combin.
-       Theory Ser. A* 119 (2012) 1711-1773.
+       Theory Ser. A* 119 (2012) 1711-1773. Cited with the numbering of
+       arXiv:1109.2688v2.
     .. [3] S. Broda, A. Machiavelo, N. Moreira and R. Reis, "Analytic
        Combinatorics and Descriptional Complexity of Regular Languages on
        Average", *ACM SIGACT News* 51(1) (2020) 38-56.
@@ -480,10 +484,10 @@ class _Check:
     def _zero_coordinates(self) -> list[int]:
         """Return the indices of the unknowns that are not identically zero.
 
-        Support propagation (Pivoteau, Salvy & Soria 2012, Lemma 3.4 and
-        Algorithm 0-coord): an unknown becomes non-zero once some monomial of
-        its right-hand side has all its unknowns non-zero. An unknown never
-        marked is 0 in every iterate, whatever the signs.
+        Support propagation (Pivoteau, Salvy & Soria 2012, arXiv:1109.2688v2,
+        Lemma 3.4 and Algorithm 0-coord): an unknown becomes non-zero once some
+        monomial of its right-hand side has all its unknowns non-zero. An
+        unknown never marked is 0 in every iterate, whatever the signs.
         """
         m = self.m
         supports = [
@@ -509,7 +513,7 @@ class _Check:
                 f"the solution has zero coordinates: {', '.join(zeros)} "
                 f"{'is' if len(zeros) == 1 else 'are'} identically 0 (every iterate "
                 "from 0 is 0) and kept as 0. Pivoteau, Salvy & Soria (2012, "
-                "Def. 5.3) exclude such systems. Remove "
+                "arXiv:1109.2688v2, Def. 5.3) exclude such systems. Remove "
                 f"{'this unknown' if len(zeros) == 1 else 'these unknowns'} if this "
                 "is not intended.",
                 ZeroCoordinateWarning,
@@ -523,7 +527,8 @@ class _Check:
         """Iterate the constant terms ``c^(h+1) = Phi(0, k, c^(h))`` from 0."""
         c: _Exprs = (sp.Integer(0),) * m
         if self.nonnegative:
-            # Pivoteau, Salvy & Soria (2012), Thm 5.7: S(0) = H^m(0, 0).
+            # Pivoteau, Salvy & Soria (2012, arXiv:1109.2688v2), Thm 5.7:
+            # S(0) = H^m(0, 0).
             for _ in range(m):
                 c = step(c)
             nxt = step(c)
@@ -535,7 +540,7 @@ class _Check:
                     f"{_fmt(syms, c)}, after {m + 1}: {_fmt(syms, nxt)}. A "
                     "convergent system with non-negative coefficients reaches its "
                     f"constant terms within {m} iteration(s) (Pivoteau, Salvy & "
-                    "Soria 2012, Thm 5.7).",
+                    "Soria 2012, arXiv:1109.2688v2, Thm 5.7).",
                     proven_for_k_ge_1=True,
                 )
             return c
@@ -577,7 +582,7 @@ class _Check:
                 IllPosedSystemError,
                 "the system is ill-posed: the iteration from 0 does not converge. "
                 f"{where} (Non-negative system: Pivoteau, Salvy & Soria 2012, "
-                "Thm 5.5 and Thm 3.6.)",
+                "arXiv:1109.2688v2, Thm 5.5 and Thm 3.6.)",
                 proven_for_k_ge_1=True,
             )
         self._fail(

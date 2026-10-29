@@ -33,9 +33,9 @@ does no other computation.
   (p. 483), §VII.6.3 a-properness (p. 489), eq. (77) (p. 494).
 - Pivoteau, Salvy, Soria, *Algorithms for combinatorial structures: Well-founded systems
   and Newton iterations*, J. Combin. Theory Ser. A 119(8) (2012) 1711–1773,
-  doi:10.1016/j.jcta.2012.05.007 (checked on Crossref). Read from arXiv:1109.2688v2;
-  **page numbers below are from that arXiv version**. Numbering of definitions, theorems
-  and algorithms is assumed to match the journal, but the journal text was not checked.
+  doi:10.1016/j.jcta.2012.05.007 (checked on Crossref). **Cited throughout (here, in
+  docstrings, messages and `docs/refs.bib`) with the numbering and pages of
+  arXiv:1109.2688v2**, which is the text that was read; the journal pagination is not used.
   Used: Def. 3.5, Lemma 3.4, Algorithm 0-coord (p. 14), Thm 3.6 and Example 4 (p. 15),
   Prop. 4.2 (p. 16), Prop. 4.5 (p. 18), Def. 5.3, Def. 5.4, Thm 5.5 (p. 21), Algorithm
   isWellFounded and Example 8 (p. 22), Thm 5.7 (p. 23).
@@ -489,4 +489,3 @@ Also:
 - Signed systems: a sharper decision procedure is possible but not planned. For example,
   periodicity of the order-1 coefficients when `J0` is not nilpotent would prove more
   cases ill-posed.
-- PSS page numbers are from arXiv v2. Check the journal pagination if a citation needs it.
