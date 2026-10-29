@@ -98,10 +98,19 @@ def test_specialize(equations: Mapping[Any, Any], value: Any) -> None:
     assert all(len(p.gens) == len(equations) + 1 for p in system.polynomials())
 
 
-def test_specialize_zero_creates_zero_coordinates() -> None:
-    assert System(BRODA_R, z=z, k=k).specialize(0).unknowns == (R,)  # no warning
-    with pytest.warns(ZeroCoordinateWarning, match="B, Bb, M, Mb, L are identically"):
-        System(BRODA_L, z=z, k=k).specialize(0)
+def test_specialize_can_create_zero_coordinates() -> None:
+    system = System({F: z + (k - 1) * G, G: (k - 1) * z}, z=z, k=k)
+    assert system._nonnegative
+    system.specialize(2)  # no warning
+    with pytest.warns(ZeroCoordinateWarning, match="G is identically 0"):
+        system.specialize(1)
+
+
+def test_nonnegative_on_domain() -> None:
+    # Signed coefficient-wise in k, but non-negative for every k >= 1.
+    system = System({F: z + (k - 1) * z * F**2}, z=z, k=k)
+    assert system._nonnegative
+    assert not System({F: z + (k - 2) * z * F**2}, z=z, k=k)._nonnegative
 
 
 @pytest.mark.parametrize(
@@ -129,7 +138,15 @@ ILL_POSED = [
     ("F=G+z,G=F", {F: G + z, G: F}, None, ["cycle F -> G -> F"]),
     ("F=1+F", {F: 1 + F}, None, ["do not stabilise", "F(0) = 2", "Thm 5.7"]),
     ("F=1+F^2", {F: 1 + F**2}, None, ["do not stabilise"]),
-    ("F=kF+z", {F: k * F + z}, k, ["[[k]]", "every integer k >= 1", "k = 0"]),
+    ("F=kF+z", {F: k * F + z}, k, ["[[k]]", "every integer k >= 1 (no coeff"]),
+    # Non-negative on the domain; the Jacobian vanishes at k = 1.
+    ("F=(k-1)F+z", {F: (k - 1) * F + z}, k, ["every integer k >= 2", "specialize(1)"]),
+    (
+        "F=1+(k-1)F",
+        {F: 1 + (k - 1) * F},
+        k,
+        ["do not stabilise", "every integer k >= 2"],
+    ),
     # Pivoteau, Salvy & Soria 2012, Example 8 (not well founded).
     ("pss-example-8", {Y1: 1 + Y2 * Y1, Y2: 1}, None, ["Y1(0) = 3, Y2(0) = 1"]),
     ("F=1-F", {F: 1 - F}, None, ["cycle", "F(0) = 0 -> F(0) = 1 -> F(0) = 0"]),
@@ -206,7 +223,8 @@ def test_z_must_be_symbol() -> None:
 
 
 @pytest.mark.parametrize(
-    ("value", "error"), [(-1, ValueError), (2.0, TypeError), (True, TypeError)]
+    ("value", "error"),
+    [(-1, ValueError), (0, ValueError), (2.0, TypeError), (True, TypeError)],
 )
 def test_specialize_rejects(value: Any, error: type[Exception]) -> None:
     with pytest.raises(error):

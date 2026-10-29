@@ -65,9 +65,9 @@ class System:
     r"""Polynomial system ``F = Phi(z, k, F)`` for generating functions.
 
     The unknowns ``F_1..F_m`` are formal power series in ``z``, and ``k`` (the
-    alphabet size, a non-negative integer) is a parameter. Each right-hand side
-    ``Phi_i`` is a polynomial in the unknowns, ``z`` and ``k`` with rational
-    coefficients. This is the form the symbolic method produces
+    alphabet size) is a parameter whose domain is the integers ``k >= 1``.
+    Each right-hand side ``Phi_i`` is a polynomial in the unknowns, ``z`` and
+    ``k`` with rational coefficients. This is the form the symbolic method produces
     (Flajolet & Sedgewick 2009, Def. I.7, p. 33, and eq. (VII.61), p. 482).
 
     Parameters
@@ -119,13 +119,23 @@ class System:
     3. *Jacobian.* ``J0 = dPhi/dF (0, k, c*)`` must be nilpotent.
 
     If steps 2 and 3 pass, the system is well-posed, whatever the signs of
-    the coefficients. When all coefficients are non-negative, the check is a
-    decision procedure. It follows Pivoteau, Salvy & Soria (2012): Thm 3.6
-    and Thm 5.5 (characterisation of well-founded systems), and Thm 5.7
-    (``c* = c^(m')``). A failure in step 2 or 3 then proves that the system
-    is ill-posed, for every integer ``k >= 1``.
+    the coefficients.
 
-    When some coefficient is negative, the check is only partial:
+    The system is *non-negative* if all its coefficients are ``>= 0`` for
+    every ``k`` in the domain. The test is sufficient and does not sample
+    ``k``: substitute ``k = 1 + t`` and require every coefficient, as a
+    polynomial in the unknowns, ``z`` and ``t``, to be ``>= 0``. For example,
+    ``F = z + (k - 1) z F^2`` is non-negative.
+
+    For non-negative systems the check is a decision procedure. It follows
+    Pivoteau, Salvy & Soria (2012): Thm 3.6 and Thm 5.5 (characterisation of
+    well-founded systems), and Thm 5.7 (``c* = c^(m')``). A failure in step 2
+    or 3 then proves that the system is ill-posed for every integer
+    ``k >= 2``. It also proves this for ``k = 1``, unless some coefficient
+    vanishes at ``k = 1``; the error message says which case applies.
+
+    When the system is not non-negative (*signed*), the check is only
+    partial:
 
     - a cycle in the constant terms proves the system ill-posed;
     - otherwise a failure raises :class:`UndecidedSystemError`.
@@ -133,8 +143,7 @@ class System:
     A system that passes for symbolic ``k`` passes for every ``k``. The
     iterates and the identity ``J0^m' = 0`` are polynomial identities in
     ``k``, and they survive substitution. Specialising may create zero
-    coordinates; for example, the Broda et al. (2020) ``L_k`` system is
-    identically 0 at ``k = 0``.
+    coordinates, e.g. ``G = (k - 1) z`` at ``k = 1``.
 
     References
     ----------
@@ -262,7 +271,7 @@ class System:
         Parameters
         ----------
         k : int
-            A non-negative integer.
+            An integer ``k >= 1`` (the domain of ``k``).
 
         Returns
         -------
@@ -274,7 +283,7 @@ class System:
         Raises
         ------
         ValueError
-            If the system has no parameter, or ``k`` is negative.
+            If the system has no parameter, or ``k < 1``.
         TypeError
             If ``k`` is not an ``int``.
         """
@@ -282,8 +291,8 @@ class System:
             raise ValueError("the system has no parameter k to specialize")
         if isinstance(k, bool) or not isinstance(k, int):
             raise TypeError(f"k must be an int, got {k!r} of type {type(k).__name__}")
-        if k < 0:
-            raise ValueError(f"k must be a non-negative integer, got {k}")
+        if k < 1:
+            raise ValueError(f"k must be an integer >= 1 (alphabet size), got {k}")
         value = sp.Integer(k)
         return System(
             {
@@ -441,10 +450,28 @@ class _Check:
         self.m = len(system._unknowns)
         gens = (*system._unknowns, system._z, *system._params)
         self.polys = [sp.Poly(phi, *gens, domain=sp.QQ) for phi in system._rhs]
-        # Non-negative: every coefficient, with k as a variable, is >= 0.
-        self.nonnegative = all(c >= 0 for p in self.polys for c in p.coeffs())
-        self.uses_k = system._k is not None and any(
-            system._k in phi.free_symbols for phi in system._rhs
+        k = system._k
+        self.uses_k = k is not None and any(
+            k in phi.free_symbols for phi in system._rhs
+        )
+        # Non-negative on the domain k >= 1: with k = 1 + t, every coefficient
+        # in (F, z, t) is >= 0 (a sufficient test that does not sample k).
+        if self.uses_k:
+            t = sp.Dummy("t")
+            shifted = [
+                sp.Poly(sp.expand(phi.xreplace({k: 1 + t})), *gens[:-1], t)
+                for phi in system._rhs
+            ]
+        else:
+            shifted = self.polys
+        self.nonnegative = all(c >= 0 for p in shifted for c in p.coeffs())
+        # Whether some coefficient (a polynomial in k) vanishes at k = 1. Such a
+        # polynomial, non-negative in t = k - 1, can vanish on the domain only
+        # there, so elsewhere the support is the same as for symbolic k.
+        self.vanishes_at_1 = self.uses_k and any(
+            c != 0 and c.subs(k, 1) == 0
+            for phi in system._rhs
+            for c in sp.Poly(phi, *gens[:-1]).coeffs()
         )
 
     def run(self) -> None:
@@ -541,7 +568,7 @@ class _Check:
                     "convergent system with non-negative coefficients reaches its "
                     f"constant terms within {m} iteration(s) (Pivoteau, Salvy & "
                     "Soria 2012, arXiv:1109.2688v2, Thm 5.7).",
-                    proven_for_k_ge_1=True,
+                    by_support=True,
                 )
             return c
         cap = _signed_cap(m)
@@ -558,7 +585,7 @@ class _Check:
                         "the system is ill-posed: the constant terms cycle, so the "
                         "coefficient of z^0 never settles and the iteration does "
                         f"not converge: {cycle}.",
-                        proven_for_k_ge_1=False,
+                        by_support=False,
                     )
             history.append(nxt)
             c = nxt
@@ -583,7 +610,7 @@ class _Check:
                 "the system is ill-posed: the iteration from 0 does not converge. "
                 f"{where} (Non-negative system: Pivoteau, Salvy & Soria 2012, "
                 "arXiv:1109.2688v2, Thm 5.5 and Thm 3.6.)",
-                proven_for_k_ge_1=True,
+                by_support=True,
             )
         self._fail(
             UndecidedSystemError,
@@ -597,7 +624,7 @@ class _Check:
         kind: type[WellPosednessError],
         message: str,
         *,
-        proven_for_k_ge_1: bool = False,
+        by_support: bool = False,
     ) -> NoReturn:
         s = self.s
         lines = [message, "  Equations:"]
@@ -606,11 +633,16 @@ class _Check:
             for f, phi in zip(s._unknowns, s._rhs, strict=True)
         ]
         if kind is IllPosedSystemError and self.uses_k:
-            if proven_for_k_ge_1:
+            if by_support and not self.vanishes_at_1:
                 lines.append(
-                    "  This holds for every integer k >= 1 (the coefficients keep "
-                    "their signs there). k = 0 changes the support of the system and "
-                    "is not covered: substitute k = 0 to check it."
+                    "  This holds for every integer k >= 1 (no coefficient vanishes "
+                    "there, so the support of the system does not change)."
+                )
+            elif by_support:
+                lines.append(
+                    "  This holds for every integer k >= 2. At k = 1 some "
+                    "coefficients vanish, so k = 1 is not covered: use "
+                    "specialize(1) to check it."
                 )
             else:
                 lines.append(

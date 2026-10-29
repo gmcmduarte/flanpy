@@ -13,7 +13,7 @@ F_i = Phi_i(z, k, F_1, ..., F_m),    i = 1..m,
 ```
 
 with unknowns `F_1..F_m` (formal power series in `z`), the size variable `z`, and the
-parameter `k` (alphabet size, a non-negative integer). Each `Phi_i` is a polynomial. Every later stage
+parameter `k` (alphabet size; domain: the integers `k >= 1`). Each `Phi_i` is a polynomial. Every later stage
 consumes a `System`: `series` computes coefficients from it, `elimination` turns it into
 one curve `G(z, w) = 0`, and the asymptotic stages work from that curve.
 
@@ -169,10 +169,13 @@ automatically.
   `F^(n+1) = Phi(z, k, F^(n))` converges in the `z`-adic topology of `Q[k][[z]]^m`. The
   limit is the solution, and it is what `series` computes. This is F&S's semantics of
   recursion (pp. 32–33, Def. I.7).
-- **Non-negative system**: every coefficient of every `Phi_i`, as a polynomial in
-  `(F, z, k)` (with `k` a variable), is `>= 0`. Otherwise the system is **signed**.
-  All Broda 2020 systems in Section 3 are non-negative: their coefficients are 1, 2, 4,
-  and `k` and `k + 1` expand to monomials with coefficient 1.
+- **Domain of `k`**: the integers `k >= 1` (alphabet sizes). `specialize` accepts only
+  these values.
+- **Non-negative system**: all coefficients of all `Phi_i` are `>= 0` for every `k` in
+  the domain. Test (sufficient, no sampling): substitute `k = 1 + t` and require every
+  coefficient, as a polynomial in `(F, z, t)`, to be `>= 0`. Example:
+  `F = z + (k − 1) z F^2` is non-negative. Otherwise the system is **signed**.
+  All Broda 2020 systems in Section 3 are non-negative.
 - **Zero coordinate**: an unknown whose iterates are all 0.
 - `System` raises `IllPosedSystemError` **only when ill-posedness is proven**. Anything
   else it cannot settle raises `UndecidedSystemError` (Section 6).
@@ -203,8 +206,10 @@ Let `m` be the number of unknowns.
    p. 14). An unknown is marked non-zero once some monomial of its right-hand side has
    all its unknowns marked. An unknown that is never marked is 0 in every iterate, for
    any signs: each monomial of its right-hand side contains an unmarked unknown. For
-   non-negative systems the converse also holds: there is no cancellation, and a
-   non-zero polynomial in `Q≥0[k]` is positive for `k >= 1`.
+   non-negative systems the converse also holds for every `k >= 2`: there is no
+   cancellation, and a non-zero polynomial with non-negative coefficients in
+   `t = k − 1` is positive for `t > 0`. It can vanish at `k = 1`, so specialising to
+   `k = 1` may create zero coordinates (Section 5.6).
    Zero coordinates are set to 0 and dropped. This leaves a reduced system with
    `m' <= m` unknowns, and a `ZeroCoordinateWarning` names the dropped ones (Section 5.6).
 1. **Constant terms.** Iterate `c^(0) = 0`, `c^(h+1) = Phi(0, k, c^(h))` on the reduced
@@ -278,8 +283,8 @@ reasons:
 - under the project's definition their iteration converges (to 0);
 - CLAUDE.md says to start with warnings;
 - specialising a valid system can create them, so rejecting them would break
-  "generic pass ⇒ pass for every `k`" (Section 5.7). For example, the Broda `L_k` system
-  at `k = 0` is identically 0 in all five unknowns.
+  "generic pass ⇒ pass for every `k`" (Section 5.7). For example,
+  `{F = z + (k − 1) G, G = (k − 1) z}` has `G ≡ 0` at `k = 1`.
 
 `series` treats them as 0.
 
@@ -298,11 +303,15 @@ only *add* zero coordinates, which give warnings, never errors.
 
 **A failure is a statement about symbolic `k`.**
 
-- Non-negative case: it holds for **every integer `k >= 1`**. There every non-zero
-  coefficient stays positive, so the supports are unchanged, and the strict inequality
-  `c^(m'+1) ≠ c^(m')` survives because the difference has non-negative coefficients.
-  `k = 0` can change the support (e.g. `F = kF + z` is well-posed at `k = 0`), and the
-  message says so.
+- Non-negative case: it holds for **every integer `k >= 2`**, and also for `k = 1`
+  unless some coefficient of the system vanishes at `k = 1`. Whether one does is decided
+  exactly: a non-zero coefficient `p(k)` vanishes at `k = 1` iff `p(1) = 0`. Justification:
+  for a non-negative system, convergence depends only on the support. Replace the
+  positive weights by 1 and you get the same structures (Section 5.4). Wherever no
+  coefficient vanishes, the support is the same as for symbolic `k`, and so is the
+  verdict. Since `p(1 + t)` has non-negative coefficients, `p(k) > 0` for `k >= 2`.
+  Example: `F = (k − 1) F + z` is ill-posed for `k >= 2` but well-posed at `k = 1`, and
+  the message says `k = 1` is not covered.
 - Signed cycle: it holds for all but finitely many `k`.
 
 The check never samples values of `k`.
@@ -323,7 +332,12 @@ flanpy.IllPosedSystemError: the system is ill-posed: the constant terms do not s
 flanpy.IllPosedSystemError: the system is ill-posed: the iteration from 0 does not converge. At z = 0 the constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[k]], which is not nilpotent: the dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau, Salvy & Soria 2012, Thm 5.5 and Thm 3.6.)
   Equations:
     F = F*k + z
-  This holds for every integer k >= 1 (the coefficients keep their signs there). k = 0 changes the support of the system and is not covered: substitute k = 0 to check it.
+  This holds for every integer k >= 1 (no coefficient vanishes there, so the support of the system does not change).
+
+flanpy.IllPosedSystemError: the system is ill-posed: the iteration from 0 does not converge. At z = 0 the constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[k - 1]], which is not nilpotent: the dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau, Salvy & Soria 2012, arXiv:1109.2688v2, Thm 5.5 and Thm 3.6.)
+  Equations:
+    F = F*k - F + z
+  This holds for every integer k >= 2. At k = 1 some coefficients vanish, so k = 1 is not covered: use specialize(1) to check it.
 
 flanpy.IllPosedSystemError: the system is ill-posed: the constant terms cycle, so the coefficient of z^0 never settles and the iteration does not converge: F(0) = 0 -> F(0) = 1 -> F(0) = 0.
   Equations:
@@ -390,7 +404,7 @@ class System:
     # F_i - Phi_i over QQ, generators (*unknowns, z, k).
     def polynomials(self) -> tuple[sympy.Poly, ...]: ...
 
-    # k >= 0; the result has k = None.
+    # k >= 1 (the domain); the result has k = None.
     def specialize(self, k: int) -> System: ...
 
     # __eq__, __hash__, __repr__ (content-based); immutable; picklable
@@ -403,7 +417,7 @@ Input rules:
 - `Phi_i` uses only the unknowns, `z` and `k`. Coefficients are exact rationals; floats
   and irrational constants are rejected.
 - There is at least one equation. `k=None` is allowed, and a `k` that is given but unused is fine.
-- `specialize(k)` requires an `int >= 0` (not `bool`) and a system with `k` set.
+- `specialize(k)` requires an `int >= 1` (not `bool`) and a system with `k` set.
 
 ## 7. Private, computed at construction
 
@@ -458,12 +472,14 @@ Well-posed. Each test checks the fields, `polynomials()` (generators, domain and
 | `F = z + 1 − (F−1)^2 (F−2)/2` | no | `1` |
 
 Zero coordinates (accepted, with a warning): `F = F`, `F = zF`, `F = F + zF` (PSS
-Example 4), `{F = z + G, G = G}`, `{F = FG, G = zF}`, and Broda `L_k` specialised to
-`k = 0`.
+Example 4), `{F = z + G, G = G}`, `{F = FG, G = zF}`, and
+`{F = z + (k − 1) G, G = (k − 1) z}` specialised to `k = 1`. `F = z + (k − 1) z F^2` takes
+the non-negative path.
 
 Ill-posed (`IllPosedSystemError`; the test matches key phrases of the message):
 `F = F + z`, `F = z + F + F^2`, `{F = G + z, G = F}`, `F = 1 + F`, `F = 1 + F^2`,
-`F = kF + z` ("every integer k >= 1"), PSS Example 8 `{Y1 = 1 + Y2 Y1, Y2 = 1}`, and the
+`F = kF + z` ("every integer k >= 1"), `F = (k − 1) F + z` and `F = 1 + (k − 1) F`
+("every integer k >= 2"), PSS Example 8 `{Y1 = 1 + Y2 Y1, Y2 = 1}`, and the
 signed cycle `F = 1 − F`.
 
 Undecided (`UndecidedSystemError`, and not `IllPosedSystemError`):
