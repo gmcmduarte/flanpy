@@ -43,6 +43,7 @@ dev = [
     "twine>=6.1",
 ]
 docs = [
+    "jupytext>=1.16",
     "sphinx>=8.2",
     "shibuya>=2025.1",
     "myst-parser>=4.0",
@@ -68,7 +69,12 @@ include = [
     "/CITATION.cff",
     "/CONTRIBUTING.md",
 ]
-exclude = ["/docs/_build"]
+# docs/examples is a symlink to examples/; ship the real files only (hatch would
+# otherwise keep one copy, under docs/examples).
+exclude = ["/docs/_build", "/docs/examples"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"examples" = "examples"
 
 # --- ruff -------------------------------------------------------------------
 
@@ -98,6 +104,9 @@ convention = "numpy"
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D"]
 "docs/**" = ["D"]
+# Running examples are jupytext notebooks: the first markdown cell is the module
+# docstring (a real docstring would render as a code cell).
+"examples/**" = ["D100"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -106,7 +115,7 @@ docstring-code-format = true
 
 [tool.mypy]
 python_version = "3.13"
-files = ["src", "tests"]
+files = ["src", "tests", "examples"]
 strict = true
 warn_unreachable = true
 

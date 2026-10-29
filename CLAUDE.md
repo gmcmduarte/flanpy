@@ -69,7 +69,11 @@ src/flanpy/
   automata/      thin regex/NFA front-end (cost vectors c_empty..c_star); optional
 tests/
 docs/
-examples/        one runnable script or notebook per paper
+examples/        running examples, jupytext percent scripts (`python examples/<name>.py`)
+                 that are also executed docs pages (docs/examples -> ../examples):
+  catalan.py     no parameter: F = 1 + z F^2, to rho = 1/4, alpha = 1/2 and the
+                 transfer [z^n] F ~ 4^n n^(-3/2) / sqrt(pi) (step 6)
+  broda2020.py   with k: Broda 2020 R_k, S_k, L_k, to eqs. (35)-(38) and Table 1 (step 7)
 ```
 
 ### Build order
@@ -93,7 +97,7 @@ These are the ground truth; the package is not "done" for a feature until its te
 - **Exact first.** No floating point inside the algebraic pipeline. Numerics only at the edges and in tests.
 - **Be explicit about conditions.** A result valid only for some `k` must say which (`KSet`); a case that is undecided must be reported, not silently dropped.
 - **Public API is a contract.** Keep it small and typed; anything not documented is private (leading underscore). Deprecate before removing. Use semantic versioning.
-- **Docs and examples with every feature**: docstrings (state the theorem or paper equation implemented), plus a worked example that reproduces the paper's number.
+- **Docs and examples with every feature**: docstrings (state the theorem or paper equation implemented). Every build-order step extends both running examples (`examples/catalan.py`, `examples/broda2020.py`) with a section that reproduces that step's results (asserts against the paper's numbers) and updates their Status cell.
 - **Cite sources in code**: reference the paper and equation number next to each algorithm (e.g. "Broda et al. 2020, eq. (27)").
 - **Small, tested steps.** One module at a time, with its acceptance test from the list above.
 - **Commit hygiene**: clear messages, one logical change per commit, no generated artifacts or large data files in the repo.
@@ -103,7 +107,7 @@ These are the ground truth; the package is not "done" for a feature until its te
 
 All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` layout). Version is static in `pyproject.toml`; `flanpy.__version__` reads it from the installed metadata.
 
-- **Extras**: `fast` (python-flint), `dev` (pytest, ruff, mypy, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, sphinxcontrib-bibtex).
+- **Extras**: `fast` (python-flint), `dev` (pytest, ruff, mypy, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, jupytext, sphinxcontrib-bibtex).
 - **Types**: `mypy --strict` (chosen over pyright: Python-native, no Node dependency). Tests are type-checked but may omit annotations.
 - **Lint/format**: `ruff` with pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, RUF and pydocstyle (NumPy convention). `dev/spikes/` is excluded (throwaway code).
 - **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors. Tests marked `slow` (N = 1000) are deselected by default (`-m "not slow"` in `addopts`); run them with `pytest -m slow`. Test helpers (e.g. `tests/_enumerate.py`, the brute-force enumerator for Broda 2020) are importable because `tests` is on pytest's `pythonpath`.
@@ -138,7 +142,7 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 ### Documentation (decided)
 
 - **Sphinx** with the **Shibuya** theme. Not MkDocs Material: it entered maintenance mode in Nov 2025 (security fixes only until Nov 2026), and MkDocs has a weaker cross-reference ecosystem.
-- **MyST-Parser**: write pages in Markdown. **MyST-NB**: one executed notebook per paper, run as part of the docs build.
+- **MyST-Parser**: write pages in Markdown. **MyST-NB**: executed notebooks, run as part of the docs build; the running examples are jupytext percent scripts read through `nb_custom_formats` (`jupytext` is in the `docs` extra).
 - **MathJax** for equations, with numbered equations that can be cited.
 - **`autodoc`** with NumPy-style docstrings for the API reference (`napoleon`).
 - **`intersphinx`** to link to SymPy / Python / mpmath docs.

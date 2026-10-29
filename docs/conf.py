@@ -31,7 +31,14 @@ source_suffix = {
     ".md": "myst-nb",
     ".ipynb": "myst-nb",
 }
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
+# conf.py is excluded because .py files are notebook sources (see below).
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "**.ipynb_checkpoints",
+    "conf.py",
+]
 
 # -- MyST / MyST-NB ----------------------------------------------------------
 
@@ -42,6 +49,9 @@ myst_enable_extensions = [
     "deflist",
 ]
 myst_dmath_double_inline = True
+# The running examples (docs/examples -> ../examples) are Python scripts in
+# jupytext percent format, read as notebooks.
+nb_custom_formats = {".py": ["jupytext.reads", {"fmt": "py:percent"}]}
 # Notebooks reproduce the papers' numbers, so they are always executed and a
 # failing cell fails the build.
 nb_execution_mode = "force"
