@@ -58,6 +58,13 @@ docs/
 examples/        one runnable script or notebook per paper
 ```
 
+### Build order
+
+1 `system` + `series` → 2 `kset` → 3 `elimination` → 4 `singularity` (+ exact algebraic reals) → 5 `newton` → 6 `transfer` → 7 `families` → 8 `symbolic` → 9 `automata` (optional).
+
+- Release 0.1.0 after step 6 (first end-to-end run: equations → asymptotics for fixed `k`). Set up PyPI trusted publishing before that release.
+- Each module: first a quadratic / square-root example (Hitchhiker's Guide style), then the Broda 2020 case as the real acceptance test.
+
 ## Acceptance tests from the papers
 
 These are the ground truth; the package is not "done" for a feature until its test passes.
