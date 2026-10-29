@@ -43,6 +43,7 @@ dev = [
     "twine>=6.1",
 ]
 docs = [
+    "jupytext>=1.16",
     "sphinx>=8.2",
     "shibuya>=2025.1",
     "myst-parser>=4.0",

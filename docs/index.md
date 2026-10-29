@@ -31,12 +31,17 @@ are implemented so far, and the public API is not stable.
 The methods follow {cite:t}`broda-2020-sigact` and
 {cite:t}`broda-2014-hitchhiker`.
 
-## Examples
+## Running examples
+
+Each example is a Python script in `examples/` (run it with `python examples/<name>.py`)
+and an executed page here. Every build-order step extends both with a section that
+reproduces that step's results.
 
 ```{toctree}
 :maxdepth: 1
 
-examples/series
+examples/catalan
+examples/broda2020
 ```
 
 ## Installation
