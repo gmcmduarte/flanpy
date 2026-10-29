@@ -2,11 +2,11 @@
 
 Open-source Python package implementing the analytic-combinatorics toolchain used by our research group (Broda, Machiavelo, Moreira, Reis, and Guilherme), so that papers can ship a runnable script that reproduces their results, instead of Mathematica files.
 
-This file holds the project's context, decisions and base rules. The package scaffolding exists (see Tooling); no algorithm is implemented yet. Update this file when decisions change.
+This file holds the project's context, decisions and base rules. Build-order step 1 (`System`, `series`) is implemented; the later steps are not. Update this file when decisions change.
 
 ## What the package does
 
-Pipeline for counting problems whose generating functions are algebraic, possibly indexed by a parameter `k` (the alphabet size, a non-negative integer):
+Pipeline for counting problems whose generating functions are algebraic, possibly indexed by a parameter `k` (the alphabet size, an integer `k >= 1`):
 
 1. **Symbolic method**: grammar -> polynomial system for generating functions; cost/multivariate series via the derivative in `u` at `u = 1`.
 2. **Elimination**: Gröbner basis (Buchberger/F5B) and resultants, to get one algebraic equation `G(z, w) = 0`.
@@ -19,6 +19,8 @@ Reference papers (uploaded to the Claude project):
 - Broda, Machiavelo, Moreira, Reis, *Analytic Combinatorics and Descriptional Complexity of Regular Languages on Average* (SIGACT News, 2020) — the full machinery for implicit curves.
 - Broda, Machiavelo, Moreira, Reis, *A Hitchhiker's Guide to descriptional complexity through analytic combinatorics* (TCS 528, 2014) — simpler curves with square-root singularities and cost generating functions.
 - Flajolet & Sedgewick, *Analytic Combinatorics* (2008) — the general theory (Thm VI.1 and Cor. VI.1, Pringsheim IV.6, algebraic coefficient asymptotics).
+- Pivoteau, Salvy, Soria, *Algorithms for combinatorial structures: Well-founded systems and Newton iterations* (JCTA 119, 2012; arXiv:1109.2688) — well-founded systems and Newton iteration; used by step 1 (cited with arXiv v2 numbering).
+- Pivoteau, Salvy, *Effective Asymptotics of Combinatorial Systems* (arXiv:2508.20008, 2025) — relevant to steps 4–6 (singularity, Newton–Puiseux, transfer); not read yet.
 
 ## Decisions
 
@@ -42,10 +44,22 @@ Reference papers (uploaded to the Claude project):
 - **Exactness**: `rho`, `a`, `alpha` are exact algebraic data (minimal polynomial + isolating interval). Floats (`mpmath`) are only for evaluation and for cross-checking.
 - **Rigor**: start with checks that emit warnings (e.g. uniqueness of the dominant singularity); certified proofs can come later.
 
+### Step 1: `System` and `series` (design notes: `dev/design/system.md`, `dev/design/series.md`)
+
+- **Public API**: `flanpy.System`; `flanpy.series(system, n, *, k=None)` (fixed `k`; `int`/`Fraction` coefficients of `z^0..z^n`, `n` included); `flanpy.series_in_k(system, n)` (`sympy.Poly` in `k`); exceptions `WellPosednessError` (a `ValueError`) with subclasses `IllPosedSystemError` (proven) and `UndecidedSystemError`; warning `ZeroCoordinateWarning`. Results are plain Python/SymPy objects whatever the backend.
+- **Domain of k**: integers `k >= 1`. `System.specialize` and `series(..., k=...)` reject other values with the same errors. A system is non-negative if it is so on that domain, tested by substituting `k = 1 + t` and requiring all coefficients in `(F, z, t)` to be `>= 0` (sufficient, no sampling).
+- **Well-posed** means: the iteration `F^(0) = 0`, `F^(n+1) = Phi(z, k, F^(n))` converges `z`-adically, for symbolic `k`; its limit is the solution `series` computes. Criterion (checked with `k` symbolic, never by sampling): drop zero coordinates (support propagation), the constant terms stabilise, the Jacobian at `z = 0` is nilpotent. For non-negative systems this is a decision procedure (Pivoteau–Salvy–Soria 2012, Thm 3.6, 5.5, 5.7, **arXiv:1109.2688v2 numbering**), with an exact bound of `m` steps for the constant terms; a failure is proven ill-posed for every `k >= 2`, and for `k = 1` unless a coefficient vanishes there. Signed systems: a passing check proves well-posedness (own argument, `system.md` §5.4); a failure is "undecided" except when the constant terms cycle (proven ill-posed); a private cap bounds the iteration. A pass for symbolic `k` implies a pass for every `k`, so `System` needs no `KSet`.
+- **Zero coordinates** (unknowns identically 0) are accepted with a `ZeroCoordinateWarning`, kept as 0 (PSS exclude them; specialising can create them).
+- **`series` algorithm**: the recurrence `(I − J0) y_n = r_n` from the stabilised constant terms (`series.md` §2–3), `O(P N^2)` coefficient operations. One code path over a private coefficient-ring interface (`_rings.py`): python-flint (`fmpz`, `fmpq`, `fmpz_poly`, `fmpq_poly`) when installed, otherwise pure Python (`int`, `Fraction`, SymPy `ZZ[k]`/`QQ[k]`). Measured at `N = 1000` (Apple M1): `L_k`, `k = 50`, 1.3 s with flint, 9.4 s pure Python. Symbolic `k` is practical up to `N ≈ 200` (≈ 400 with flint). Newton iteration (PSS Thm 8.10) is faster from `N ≈ 2000` and can be added later behind the same interface.
+- **Erratum, Broda 2020 eq. (5)** (pending confirmation with the authors): for odd `n` the prefactor should be `(n − 1)/2^(n+1)`, not `(n − 1)/2^(n+2)` (e.g. `k = 1`, `n = 3`: 4 stars, the printed formula gives 2). The tests use the corrected form and cite the erratum.
+
 ## Planned layout
 
 ```
 src/flanpy/
+  _system.py     System (F = Phi(z, k, F)) and its well-posedness check; re-exported from flanpy
+  _series.py     series / series_in_k: coefficients of a System; re-exported from flanpy
+  _rings.py      private coefficient rings: pure-Python and python-flint backends
   symbolic/      grammar -> equations, bivariate cost series (d/du at u=1)
   elimination/   Groebner and resultants, backend interface
   singularity/   m_rho, m_a, Case I/II, dominant-singularity checks
@@ -57,6 +71,13 @@ tests/
 docs/
 examples/        one runnable script or notebook per paper
 ```
+
+### Build order
+
+1 `system` + `series` → 2 `kset` → 3 `elimination` → 4 `singularity` (+ exact algebraic reals) → 5 `newton` → 6 `transfer` → 7 `families` → 8 `symbolic` → 9 `automata` (optional).
+
+- Release 0.1.0 after step 6 (first end-to-end run: equations → asymptotics for fixed `k`). Set up PyPI trusted publishing before that release.
+- Each module: first a quadratic / square-root example (Hitchhiker's Guide style), then the Broda 2020 case as the real acceptance test.
 
 ## Acceptance tests from the papers
 
@@ -76,6 +97,7 @@ These are the ground truth; the package is not "done" for a feature until its te
 - **Cite sources in code**: reference the paper and equation number next to each algorithm (e.g. "Broda et al. 2020, eq. (27)").
 - **Small, tested steps.** One module at a time, with its acceptance test from the list above.
 - **Commit hygiene**: clear messages, one logical change per commit, no generated artifacts or large data files in the repo.
+- **Reports**: compact, at most ~40 lines, one line per item, point to design notes instead of repeating them, full detail only for PROBLEMS and QUESTIONS.
 
 ## Tooling
 
@@ -84,16 +106,17 @@ All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` l
 - **Extras**: `fast` (python-flint), `dev` (pytest, ruff, mypy, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, sphinxcontrib-bibtex).
 - **Types**: `mypy --strict` (chosen over pyright: Python-native, no Node dependency). Tests are type-checked but may omit annotations.
 - **Lint/format**: `ruff` with pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, RUF and pydocstyle (NumPy convention). `dev/spikes/` is excluded (throwaway code).
-- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors.
+- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors. Tests marked `slow` (N = 1000) are deselected by default (`-m "not slow"` in `addopts`); run them with `pytest -m slow`. Test helpers (e.g. `tests/_enumerate.py`, the brute-force enumerator for Broda 2020) are importable because `tests` is on pytest's `pythonpath`.
 - **SPDX**: every `.py` file starts with `# SPDX-License-Identifier: GPL-3.0-or-later`.
-- **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 and `3.x`, plus a docs job (`sphinx-build -W` for HTML, then the `doctest` builder). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
-- **Repo files**: `README.md`, `CITATION.cff`, `CONTRIBUTING.md`, `docs/refs.bib` (DOIs checked against Crossref).
+- **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 with the `fast` extra (flint backend) and on `3.x` without it (pure-Python backend; each job checks which backend it got), a `Slow tests` job (`pytest -m slow`, both entries) on every push and PR, plus a docs job (`sphinx-build -W` for HTML, executing the MyST-NB examples, then the `doctest` builder). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
+- **Repo files**: `README.md`, `CITATION.cff`, `CONTRIBUTING.md`, `docs/refs.bib` (DOIs checked against Crossref; arXiv-only entries against the arXiv API).
 
 Commands (from the repo root, in a Python 3.13 venv):
 
 ```
 pip install -e ".[dev,docs]"         # add ,fast for python-flint
-pytest                               # tests + doctests
+pytest                               # tests + doctests (slow tests deselected)
+pytest -m slow                       # N = 1000 tests
 ruff check . && ruff format --check .
 mypy                                 # strict, src + tests
 sphinx-build -W --keep-going docs docs/_build/html
@@ -130,5 +153,7 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - [x] Read the Docs: project `flanpy` imported 2026-10-29; https://flanpy.readthedocs.io/ (pull-request builds enabled).
 - [x] PyPI: name reserved with `0.0.1.dev0` on 2026-10-29; https://pypi.org/project/flanpy/.
 - [x] PyPI token: project-scoped token for `flanpy` in `~/.pypirc` `[pypi]` (done by Guilherme, 2026-10-29).
+- [x] Build-order step 1 (`system` + `series`): done 2026-10-29 (PR #1).
+- Confirm the Broda 2020 eq. (5) erratum with the authors (see Decisions, step 1).
 - PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
 - Remaining technical risk: roots of characteristic polynomials that are not expressible in radicals (see Decisions), and Case I curves with larger systems, where the Groebner step may be slow. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.

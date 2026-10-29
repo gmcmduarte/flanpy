@@ -110,6 +110,16 @@ files = ["src", "tests"]
 strict = true
 warn_unreachable = true
 
+# SymPy ships no type information (no py.typed marker).
+[[tool.mypy.overrides]]
+module = ["sympy", "sympy.*"]
+ignore_missing_imports = true
+
+# python-flint is optional (the `fast` extra); it ships py.typed when installed.
+[[tool.mypy.overrides]]
+module = ["flint", "flint.*"]
+ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
@@ -120,12 +130,18 @@ disallow_incomplete_defs = false
 [tool.pytest.ini_options]
 minversion = "9.0"
 testpaths = ["tests", "src/flanpy"]
+# Test helpers (tests/_enumerate.py) are imported as top-level modules.
+pythonpath = ["tests"]
 addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
     "--doctest-modules",
     "--import-mode=importlib",
+    # Slow tests (N = 1000) run in their own CI job: pytest -m slow
+    "-m",
+    "not slow",
 ]
+markers = ["slow: long-running tests (N = 1000); run with pytest -m slow"]
 xfail_strict = true
 filterwarnings = ["error"]

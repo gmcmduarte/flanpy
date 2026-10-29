@@ -7,8 +7,9 @@ of the coefficients of an algebraic generating function, possibly for a family
 indexed by the alphabet size $k$.
 
 ```{warning}
-flanpy is pre-alpha: it has no usable functionality yet. Nothing beyond the
-package skeleton is implemented, and the public API is not stable.
+flanpy is pre-alpha. Only the input type {class}`flanpy.System` and its
+power-series coefficients ({func}`flanpy.series`, {func}`flanpy.series_in_k`)
+are implemented so far, and the public API is not stable.
 ```
 
 ## Pipeline
@@ -30,6 +31,14 @@ package skeleton is implemented, and the public API is not stable.
 The methods follow {cite:t}`broda-2020-sigact` and
 {cite:t}`broda-2014-hitchhiker`.
 
+## Examples
+
+```{toctree}
+:maxdepth: 1
+
+examples/series
+```
+
 ## Installation
 
 ```console
@@ -40,7 +49,25 @@ $ pip install flanpy
 
 ```{eval-rst}
 .. automodule:: flanpy
+
+.. autoclass:: flanpy.System
+   :members: unknowns, equations, z, k, polynomials, specialize
+
+.. autoexception:: flanpy.WellPosednessError
+
+.. autoexception:: flanpy.IllPosedSystemError
+
+.. autoexception:: flanpy.UndecidedSystemError
+
+.. autoexception:: flanpy.ZeroCoordinateWarning
+
+.. autofunction:: flanpy.series
+
+.. autofunction:: flanpy.series_in_k
 ```
+
+Well-posedness of a {class}`~flanpy.System` follows
+{cite:t}`flajolet-sedgewick-2009` and {cite:t}`pivoteau-salvy-soria-2012`.
 
 ## References
 

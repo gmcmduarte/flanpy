@@ -7,7 +7,8 @@ elimination to a single algebraic curve ``G(z, w) = 0``, singularity analysis,
 Newton-Puiseux expansions, and transfer theorems for coefficient asymptotics,
 possibly for families indexed by the alphabet size ``k``.
 
-Pre-alpha: nothing is implemented yet; this is the package skeleton.
+Pre-alpha: the input type :class:`System` and its power-series coefficients
+(:func:`series`, :func:`series_in_k`) are implemented so far.
 
 Examples
 --------
@@ -19,6 +20,24 @@ True
 
 from importlib.metadata import version as _version
 
+from flanpy._series import series, series_in_k
+from flanpy._system import (
+    IllPosedSystemError,
+    System,
+    UndecidedSystemError,
+    WellPosednessError,
+    ZeroCoordinateWarning,
+)
+
 __version__: str = _version("flanpy")
 
-__all__ = ["__version__"]
+__all__ = [
+    "IllPosedSystemError",
+    "System",
+    "UndecidedSystemError",
+    "WellPosednessError",
+    "ZeroCoordinateWarning",
+    "__version__",
+    "series",
+    "series_in_k",
+]
