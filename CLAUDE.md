@@ -68,7 +68,7 @@ src/flanpy/
   families/      expansions in 1/k, KSet
   automata/      thin regex/NFA front-end (cost vectors c_empty..c_star); optional
 tests/
-docs/
+docs/            index, API reference, guide/ (one executed user-guide page per module)
 examples/        running examples, jupytext percent scripts (`python examples/<name>.py`)
                  that are also executed docs pages (docs/examples -> ../examples):
   catalan.py     no parameter: F = 1 + z F^2, to rho = 1/4, alpha = 1/2 and the
@@ -98,6 +98,8 @@ These are the ground truth; the package is not "done" for a feature until its te
 - **Be explicit about conditions.** A result valid only for some `k` must say which (`KSet`); a case that is undecided must be reported, not silently dropped.
 - **Public API is a contract.** Keep it small and typed; anything not documented is private (leading underscore). Deprecate before removing. Use semantic versioning.
 - **Docs and examples with every feature**: docstrings (state the theorem or paper equation implemented). Every build-order step extends both running examples (`examples/catalan.py`, `examples/broda2020.py`) with a section that reproduces that step's results (asserts against the paper's numbers) and updates their Status cell.
+- **Examples for the public API**: every public, non-trivial function, method and property has a self-contained, doctested NumPy `Examples` section (own imports and `symbols(...)`; reuse Catalan `F = 1 + z F^2` and Broda 2020 `R_k`; show the output; exceptions as tracebacks with the real message). Enforced in CI by `tests/test_docstrings.py` (numpydoc EX01 over `flanpy.__all__`, with an allowlist of trivial members and the reason for each).
+- **User guide**: each module gets a short, executed user-guide page in `docs/guide/` (API usage; the paper reproductions stay in the running examples).
 - **Cite sources in code**: reference the paper and equation number next to each algorithm (e.g. "Broda et al. 2020, eq. (27)").
 - **Small, tested steps.** One module at a time, with its acceptance test from the list above.
 - **Commit hygiene**: clear messages, one logical change per commit, no generated artifacts or large data files in the repo.
@@ -107,7 +109,7 @@ These are the ground truth; the package is not "done" for a feature until its te
 
 All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` layout). Version is static in `pyproject.toml`; `flanpy.__version__` reads it from the installed metadata.
 
-- **Extras**: `fast` (python-flint), `dev` (pytest, ruff, mypy, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, jupytext, sphinxcontrib-bibtex).
+- **Extras**: `fast` (python-flint), `dev` (pytest, ruff, mypy, numpydoc, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, jupytext, sphinxcontrib-bibtex).
 - **Types**: `mypy --strict` (chosen over pyright: Python-native, no Node dependency). Tests are type-checked but may omit annotations.
 - **Lint/format**: `ruff` with pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, RUF and pydocstyle (NumPy convention). `dev/spikes/` is excluded (throwaway code).
 - **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors. Tests marked `slow` (N = 1000) are deselected by default (`-m "not slow"` in `addopts`); run them with `pytest -m slow`. Test helpers (e.g. `tests/_enumerate.py`, the brute-force enumerator for Broda 2020) are importable because `tests` is on pytest's `pythonpath`.
@@ -149,7 +151,7 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - **`sphinxcontrib-bibtex`** to cite the papers from a `.bib` file.
 - **`doctest`** (and executed notebooks) so the docs fail to build if a paper's number stops reproducing.
 - Hosting: Read the Docs (decided 2026-10-29; the repository is public), configured by `.readthedocs.yaml`. CI also builds the docs and runs the Sphinx doctest builder. HTML is the primary output.
-- Docs grow with the code: every feature lands with its docstring (naming the theorem or paper equation implemented) and a worked example in the same change.
+- Docs grow with the code: every feature lands, in the same change, with its docstring (naming the theorem or paper equation implemented) and doctested `Examples` section, its user-guide page in `docs/guide/`, and a new section in both running examples.
 
 ## Open items
 
