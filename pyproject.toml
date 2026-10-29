@@ -1,0 +1,129 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyflan"
+version = "0.0.1.dev0"
+description = "Analytic combinatorics toolchain for algebraic generating functions in descriptional complexity."
+readme = "README.md"
+requires-python = ">=3.13"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Guilherme Duarte" }]
+keywords = [
+    "analytic combinatorics",
+    "generating functions",
+    "singularity analysis",
+    "descriptional complexity",
+    "formal languages",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Typing :: Typed",
+]
+dependencies = [
+    "sympy>=1.14",
+    "mpmath>=1.3",
+]
+
+[project.optional-dependencies]
+fast = ["python-flint>=0.7"]
+dev = [
+    "pytest>=9.0",
+    "ruff>=0.15",
+    "mypy>=2.0",
+    "build>=1.2",
+]
+docs = [
+    "sphinx>=8.2",
+    "shibuya>=2025.1",
+    "myst-parser>=4.0",
+    "myst-nb>=1.2",
+    "sphinxcontrib-bibtex>=2.6",
+]
+
+[project.urls]
+Repository = "https://github.com/gmcmduarte/pyflan"
+Issues = "https://github.com/gmcmduarte/pyflan/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pyflan"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/docs",
+    "/LICENSE",
+    "/README.md",
+    "/CITATION.cff",
+    "/CONTRIBUTING.md",
+]
+exclude = ["/docs/_build"]
+
+# --- ruff -------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+src = ["src", "tests"]
+# dev/spikes holds throwaway exploration code; it is kept for reference only.
+extend-exclude = ["dev/spikes"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+    "D",   # pydocstyle
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+"docs/**" = ["D"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# --- mypy -------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.13"
+files = ["src", "tests"]
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+# --- pytest -----------------------------------------------------------------
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests", "src/pyflan"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--doctest-modules",
+    "--import-mode=importlib",
+]
+xfail_strict = true
+filterwarnings = ["error"]

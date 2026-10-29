@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Spike: (1) Newton-Puiseux over number fields, (2) alpha via derivative support + gcd with m_rho.
 Targets: Broda et al. 2020, eqs. (32), (35), (36)."""
 import sympy as sp
