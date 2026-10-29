@@ -1,13 +1,13 @@
-# pyflan
+# flanpy
 
-**pyflan** is a Python implementation of the analytic-combinatorics toolchain
+**flanpy** is a Python implementation of the analytic-combinatorics toolchain
 used to study the average descriptional complexity of regular languages and
 related objects. It goes from a combinatorial specification to the asymptotics
 of the coefficients of an algebraic generating function, possibly for a family
 indexed by the alphabet size $k$.
 
 ```{warning}
-pyflan is pre-alpha: it has no usable functionality yet. Nothing beyond the
+flanpy is pre-alpha: it has no usable functionality yet. Nothing beyond the
 package skeleton is implemented, and the public API is not stable.
 ```
 
@@ -33,13 +33,13 @@ The methods follow {cite:t}`broda-2020-sigact` and
 ## Installation
 
 ```console
-$ pip install pyflan
+$ pip install flanpy
 ```
 
 ## API
 
 ```{eval-rst}
-.. automodule:: pyflan
+.. automodule:: flanpy
 ```
 
 ## References

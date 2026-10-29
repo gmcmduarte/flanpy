@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pyflan"
+name = "flanpy"
 version = "0.0.1.dev0"
 description = "Analytic combinatorics toolchain for algebraic generating functions in descriptional complexity."
 readme = "README.md"
@@ -51,11 +51,11 @@ docs = [
 ]
 
 [project.urls]
-Repository = "https://github.com/gmcmduarte/pyflan"
-Issues = "https://github.com/gmcmduarte/pyflan/issues"
+Repository = "https://github.com/gmcmduarte/flanpy"
+Issues = "https://github.com/gmcmduarte/flanpy/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pyflan"]
+packages = ["src/flanpy"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -118,7 +118,7 @@ disallow_incomplete_defs = false
 
 [tool.pytest.ini_options]
 minversion = "9.0"
-testpaths = ["tests", "src/pyflan"]
+testpaths = ["tests", "src/flanpy"]
 addopts = [
     "-ra",
     "--strict-markers",

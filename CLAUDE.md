@@ -1,4 +1,4 @@
-# CLAUDE.md — pyflan
+# CLAUDE.md — flanpy
 
 Open-source Python package implementing the analytic-combinatorics toolchain used by our research group (Broda, Machiavelo, Moreira, Reis, and Guilherme), so that papers can ship a runnable script that reproduces their results, instead of Mathematica files.
 
@@ -22,8 +22,9 @@ Reference papers (uploaded to the Claude project):
 
 ## Decisions
 
-- **Name**: `pyflan` (PyPI distribution name and import name: `import pyflan`).
-- **Repository**: `git@github.com:gmcmduarte/pyflan.git` (GitHub, created; remote `origin`).
+- **Name**: `flanpy` (PyPI distribution name and import name: `import flanpy`).
+- **Name history**: `pyflan` was rejected by PyPI on 2026-10-29 as too similar to `pyfian`; check any future name against look-alikes (l/i/1, o/0, separators) before using it.
+- **Repository**: `git@github.com:gmcmduarte/flanpy.git` (GitHub, created; remote `origin`).
 - **Author**: Guilherme Duarte (for `pyproject.toml`, `CITATION.cff` and licence headers). Add the other group members later if/when the group decides.
 - **Python**: `requires-python >= 3.13`; CI also on the newest release.
 - **Licence**: GPL-3.0-or-later (compatible with SymPy BSD, python-flint MIT, Sage GPL). Confirmed by the supervisors and the institution. Add an SPDX header to every source file.
@@ -42,7 +43,7 @@ Reference papers (uploaded to the Claude project):
 ## Planned layout
 
 ```
-src/pyflan/
+src/flanpy/
   symbolic/      grammar -> equations, bivariate cost series (d/du at u=1)
   elimination/   Groebner and resultants, backend interface
   singularity/   m_rho, m_a, Case I/II, dominant-singularity checks
@@ -76,12 +77,12 @@ These are the ground truth; the package is not "done" for a feature until its te
 
 ## Tooling
 
-All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` layout). Version is static in `pyproject.toml`; `pyflan.__version__` reads it from the installed metadata.
+All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` layout). Version is static in `pyproject.toml`; `flanpy.__version__` reads it from the installed metadata.
 
 - **Extras**: `fast` (python-flint), `dev` (pytest, ruff, mypy, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, sphinxcontrib-bibtex).
 - **Types**: `mypy --strict` (chosen over pyright: Python-native, no Node dependency). Tests are type-checked but may omit annotations.
 - **Lint/format**: `ruff` with pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, RUF and pydocstyle (NumPy convention). `dev/spikes/` is excluded (throwaway code).
-- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/pyflan`; warnings are errors.
+- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors.
 - **SPDX**: every `.py` file starts with `# SPDX-License-Identifier: GPL-3.0-or-later`.
 - **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 and `3.x`, plus a docs job (`sphinx-build -W` for HTML, then the `doctest` builder). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
 - **Repo files**: `README.md`, `CITATION.cff`, `CONTRIBUTING.md`, `docs/refs.bib` (DOIs checked against Crossref).
@@ -115,6 +116,6 @@ twine check dist/*                   # release metadata check
 
 - [x] Tooling: pytest, ruff, mypy (strict) set up. Shibuya 2026.7.12 builds cleanly with Sphinx 9.2.0 on Python 3.13 (`-W`, no warnings); tests and mypy also pass on Python 3.15.
 - Read the Docs: import the GitHub project on readthedocs.org (needs the maintainer's RTD account); `.readthedocs.yaml` is ready.
-- PyPI: `pyflan` was free on 2026-10-29; reserve it by uploading `0.0.1.dev0` manually with `twine` (maintainer's token).
+- PyPI: `flanpy` (and look-alikes `fianpy`, `f1anpy`, `flan-py`) was free on 2026-10-29; reserve it by uploading `0.0.1.dev0` manually with `twine` (maintainer's token).
 - PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
 - Remaining technical risk: roots of characteristic polynomials that are not expressible in radicals (see Decisions), and Case I curves with larger systems, where the Groebner step may be slow. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.

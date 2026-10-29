@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Sphinx configuration for the pyflan documentation."""
+"""Sphinx configuration for the flanpy documentation."""
 
 from __future__ import annotations
 
-import pyflan
+import flanpy
 
 # -- Project information -----------------------------------------------------
 
-project = "pyflan"
+project = "flanpy"
 author = "Guilherme Duarte"
 copyright = "2026, Guilherme Duarte"
-release = pyflan.__version__
+release = flanpy.__version__
 version = ".".join(release.split(".")[:2])
 
 # -- General configuration ---------------------------------------------------
@@ -78,14 +78,14 @@ bibtex_reference_style = "author_year"
 # -- HTML output -------------------------------------------------------------
 
 html_theme = "shibuya"
-html_title = "pyflan"
+html_title = "flanpy"
 html_theme_options = {
-    "github_url": "https://github.com/gmcmduarte/pyflan",
+    "github_url": "https://github.com/gmcmduarte/flanpy",
 }
 html_context = {
     "source_type": "github",
     "source_user": "gmcmduarte",
-    "source_repo": "pyflan",
+    "source_repo": "flanpy",
     "source_version": "main",
     "source_docs_path": "/docs/",
 }

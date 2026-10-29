@@ -1,4 +1,4 @@
-# Contributing to pyflan
+# Contributing to flanpy
 
 Contributions are welcome. Please open an issue to discuss larger changes first.
 

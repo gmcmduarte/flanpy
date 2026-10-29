@@ -1,13 +1,13 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "pyflan: analytic combinatorics for algebraic generating functions"
+title: "flanpy: analytic combinatorics for algebraic generating functions"
 type: software
 authors:
   - family-names: Duarte
     given-names: Guilherme
 version: 0.0.1.dev0
 license: GPL-3.0-or-later
-repository-code: "https://github.com/gmcmduarte/pyflan"
+repository-code: "https://github.com/gmcmduarte/flanpy"
 keywords:
   - analytic combinatorics
   - generating functions

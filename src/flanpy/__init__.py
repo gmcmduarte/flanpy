@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""pyflan: analytic combinatorics for algebraic generating functions.
+"""flanpy: analytic combinatorics for algebraic generating functions.
 
 The package implements the pipeline used in descriptional-complexity papers
 by Broda, Machiavelo, Moreira and Reis: from a grammar to a polynomial system,
@@ -11,13 +11,13 @@ Pre-alpha: nothing is implemented yet; this is the package skeleton.
 
 Examples
 --------
->>> import pyflan
->>> pyflan.__version__
+>>> import flanpy
+>>> flanpy.__version__
 '0.0.1.dev0'
 """
 
 from importlib.metadata import version as _version
 
-__version__: str = _version("pyflan")
+__version__: str = _version("flanpy")
 
 __all__ = ["__version__"]
