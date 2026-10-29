@@ -7,8 +7,8 @@ of the coefficients of an algebraic generating function, possibly for a family
 indexed by the alphabet size $k$.
 
 ```{warning}
-pyflan is in early development. Nothing beyond the package skeleton is
-implemented yet, and the public API is not stable.
+pyflan is pre-alpha: it has no usable functionality yet. Nothing beyond the
+package skeleton is implemented, and the public API is not stable.
 ```
 
 ## Pipeline

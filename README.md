@@ -11,8 +11,9 @@ can ship a runnable script that reproduces their results.
 
 ## Status
 
-Early development. Nothing beyond the package skeleton is implemented yet and
-the API is not stable.
+**Pre-alpha: no usable functionality yet.** The releases currently on PyPI
+contain only the package skeleton; they exist to reserve the name. Nothing in
+the pipeline above is implemented yet, and the API is not stable.
 
 ## Installation
 

@@ -7,7 +7,7 @@ elimination to a single algebraic curve ``G(z, w) = 0``, singularity analysis,
 Newton-Puiseux expansions, and transfer theorems for coefficient asymptotics,
 possibly for families indexed by the alphabet size ``k``.
 
-Nothing is implemented yet; this is the package skeleton.
+Pre-alpha: nothing is implemented yet; this is the package skeleton.
 
 Examples
 --------
