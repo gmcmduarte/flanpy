@@ -58,6 +58,12 @@ def series(
     ValueError
         If ``n < 0``, ``k < 1``, or ``k`` is missing or given when it should not be.
 
+    Warns
+    -----
+    ZeroCoordinateWarning
+        If some unknowns are identically zero at this ``k``. ``k`` is validated
+        exactly as by :meth:`System.specialize`.
+
     Notes
     -----
     The coefficients are computed by the recurrence ``(I - J0) y_n = r_n``, where
@@ -94,16 +100,15 @@ def series(
     if system.k is None:
         if k is not None:
             raise ValueError("the system has no parameter k; omit the k argument")
-    else:
-        if k is None:
-            raise ValueError(
-                "the system has a parameter k: pass k=<int >= 1>, or use "
-                "series_in_k for symbolic k"
-            )
-        if isinstance(k, bool) or not isinstance(k, int):
-            raise TypeError(f"k must be an int, got {k!r}")
-        if k < 1:
-            raise ValueError(f"k must be an integer >= 1 (alphabet size), got {k}")
+        return _series(system, n, None)
+    if k is None:
+        raise ValueError(
+            "the system has a parameter k: pass k=<int >= 1>, or use "
+            "series_in_k for symbolic k"
+        )
+    # Validate k exactly like System.specialize (same errors, and the same
+    # ZeroCoordinateWarning for zero coordinates that appear only at this k).
+    system.specialize(k)
     return _series(system, n, k)
 
 

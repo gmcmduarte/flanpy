@@ -262,8 +262,6 @@ def test_result_types_and_shape() -> None:
         (lambda s, c: series(s, 2.0), TypeError, "n must be an int"),  # type: ignore[arg-type]
         (lambda s, c: series(s, 3, k=2), ValueError, "omit the k"),
         (lambda s, c: series(c, 3), ValueError, "series_in_k"),
-        (lambda s, c: series(c, 3, k=0), ValueError, ">= 1"),
-        (lambda s, c: series(c, 3, k=2.0), TypeError, "k must be an int"),  # type: ignore[arg-type]
         (lambda s, c: series_in_k(s, 3), ValueError, "needs a system with a parameter"),
         (lambda s, c: series("system", 3), TypeError, "flanpy.System"),  # type: ignore[arg-type]
     ],
@@ -325,3 +323,28 @@ def test_n1000_L(backend: Any, kk: int) -> None:
     lhs[2] -= kk * kk
     lhs[3] -= 2 * kk * kk
     assert lhs == [0] * (n + 1)
+
+
+@pytest.mark.parametrize("value", [0, -3, 2.0, True])
+def test_series_validates_k_like_specialize(value: Any) -> None:
+    system = System(BRODA_R, z=z, k=k)
+    with pytest.raises((TypeError, ValueError)) as expected:
+        system.specialize(value)
+    with pytest.raises(type(expected.value)) as got:
+        series(system, 3, k=value)
+    assert str(got.value) == str(expected.value)
+
+
+def test_series_warns_zero_coordinates_at_k() -> None:
+    # G = (k - 1) z vanishes only at k = 1; the system itself has no zero coordinate.
+    system = System({F: z + (k - 1) * G, G: (k - 1) * z}, z=z, k=k)
+    series(system, 3, k=2)  # no warning (warnings are errors in the test suite)
+    with pytest.warns(ZeroCoordinateWarning, match="G is identically 0") as record:
+        values = series(system, 3, k=1)
+    assert values[G] == (0, 0, 0, 0)
+    assert values[F] == (0, 1, 0, 0)
+    # The warning points at the caller (this file), not into flanpy.
+    assert record[0].filename == __file__
+    with pytest.warns(ZeroCoordinateWarning) as record:
+        system.specialize(1)
+    assert record[0].filename == __file__

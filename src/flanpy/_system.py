@@ -8,6 +8,7 @@ theorems, lemmas, algorithms).
 
 from __future__ import annotations
 
+import os
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
@@ -544,7 +545,8 @@ class _Check:
                 f"{'this unknown' if len(zeros) == 1 else 'these unknowns'} if this "
                 "is not intended.",
                 ZeroCoordinateWarning,
-                stacklevel=4,
+                # Point at the caller's code, from any depth inside flanpy.
+                skip_file_prefixes=(os.path.dirname(__file__),),
             )
         return [i for i in range(m) if nonzero[i]]
 
