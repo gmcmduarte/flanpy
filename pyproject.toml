@@ -115,6 +115,11 @@ warn_unreachable = true
 module = ["sympy", "sympy.*"]
 ignore_missing_imports = true
 
+# python-flint is optional (the `fast` extra); it ships py.typed when installed.
+[[tool.mypy.overrides]]
+module = ["flint", "flint.*"]
+ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false

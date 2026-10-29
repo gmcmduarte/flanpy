@@ -14,13 +14,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Both coefficient backends are exercised: Python 3.13 installs the `fast` extra
+  # (python-flint), so tests run on both backends; the newest Python installs no
+  # extra, so the pure-Python fallback is tested where flint wheels may lag.
   test:
-    name: Tests (Python ${{ matrix.python-version }})
+    name: Tests (Python ${{ matrix.python-version }}, ${{ matrix.backend }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13", "3.x"]
+        include:
+          - python-version: "3.13"
+            extras: "dev,fast"
+            backend: flint
+          - python-version: "3.x"
+            extras: "dev"
+            backend: python
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -31,10 +40,12 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
-      - name: Record Python version
+          python -m pip install -e ".[${{ matrix.extras }}]"
+      - name: Record Python version and backend
         run: |
-          echo "### Python $(python -c 'import platform; print(platform.python_version())') (matrix: ${{ matrix.python-version }})" >> "$GITHUB_STEP_SUMMARY"
+          backend=$(python -c 'from flanpy._rings import backend; print(backend().name)')
+          echo "### Python $(python -c 'import platform; print(platform.python_version())') (matrix: ${{ matrix.python-version }}), backend: $backend" >> "$GITHUB_STEP_SUMMARY"
+          test "$backend" = "${{ matrix.backend }}"
       - name: Lint (ruff)
         run: |
           ruff check --output-format=github .
@@ -45,6 +56,33 @@ jobs:
         run: pytest
       - name: Build sdist and wheel
         run: python -m build
+
+  slow:
+    name: Slow tests (Python ${{ matrix.python-version }}, ${{ matrix.backend }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.13"
+            extras: "dev,fast"
+            backend: flint
+          - python-version: "3.x"
+            extras: "dev"
+            backend: python
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: false
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[${{ matrix.extras }}]"
+      - name: Slow tests (pytest -m slow)
+        run: pytest -m slow --durations=0
 
   docs:
     name: Docs
