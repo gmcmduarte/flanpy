@@ -7,8 +7,8 @@ of the coefficients of an algebraic generating function, possibly for a family
 indexed by the alphabet size $k$.
 
 ```{warning}
-flanpy is pre-alpha: it has no usable functionality yet. Nothing beyond the
-package skeleton is implemented, and the public API is not stable.
+flanpy is pre-alpha. Only the input type {class}`flanpy.System` is
+implemented so far, and the public API is not stable.
 ```
 
 ## Pipeline
@@ -40,7 +40,21 @@ $ pip install flanpy
 
 ```{eval-rst}
 .. automodule:: flanpy
+
+.. autoclass:: flanpy.System
+   :members: unknowns, equations, z, k, polynomials, specialize
+
+.. autoexception:: flanpy.WellPosednessError
+
+.. autoexception:: flanpy.IllPosedSystemError
+
+.. autoexception:: flanpy.UndecidedSystemError
+
+.. autoexception:: flanpy.ZeroCoordinateWarning
 ```
+
+Well-posedness of a {class}`~flanpy.System` follows
+{cite:t}`flajolet-sedgewick-2009` and {cite:t}`pivoteau-salvy-soria-2012`.
 
 ## References
 
