@@ -9,6 +9,8 @@ theorems, lemmas, algorithms).
 from __future__ import annotations
 
 import os
+import re
+import textwrap
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
@@ -41,22 +43,92 @@ class WellPosednessError(ValueError):
 
     Base class of :class:`IllPosedSystemError` (proven ill-posed) and
     :class:`UndecidedSystemError` (not decided).
+
+    Examples
+    --------
+    One ``except`` clause catches both outcomes:
+
+    >>> from sympy import symbols
+    >>> from flanpy import System, WellPosednessError
+    >>> z, F = symbols("z F")
+    >>> try:
+    ...     System({F: 1 + F**2}, z=z)
+    ... except WellPosednessError as error:
+    ...     print(type(error).__name__)
+    IllPosedSystemError
     """
 
 
 class IllPosedSystemError(WellPosednessError):
-    """The system is proven ill-posed: the iteration from 0 does not converge."""
+    """The system is proven ill-posed: the iteration from 0 does not converge.
+
+    Examples
+    --------
+    The Catalan equation without its ``z``, ``F = 1 + F^2``: the constant terms
+    grow forever.
+
+    >>> from sympy import symbols
+    >>> from flanpy import System
+    >>> z, F = symbols("z F")
+    >>> System({F: 1 + F**2}, z=z)
+    Traceback (most recent call last):
+        ...
+    flanpy.IllPosedSystemError: the system is ill-posed.
+      The constant terms do not stabilise, so the iteration does not converge.
+      After 1 iteration(s) F(0) = 1, after 2: F(0) = 2. A convergent system with
+      non-negative coefficients reaches its constant terms within 1 iteration(s)
+      (Pivoteau, Salvy & Soria 2012, arXiv:1109.2688v2, Thm 5.7).
+      Equations:
+        F = F**2 + 1
+    """
 
 
 class UndecidedSystemError(WellPosednessError):
     """The check could not decide whether the system is well-posed.
 
     This is never a claim that the system is ill-posed.
+
+    Examples
+    --------
+    ``F = z - F`` is in fact ill-posed: its iterates alternate ``0, z, 0, z, ...``
+    and never converge. But the check is conservative for signed systems: it
+    proves ill-posedness only when the constant terms cycle, and here they are
+    constantly 0, so it reports "undecided" rather than guessing.
+
+    >>> from sympy import symbols
+    >>> from flanpy import System
+    >>> z, F = symbols("z F")
+    >>> System({F: z - F}, z=z)
+    Traceback (most recent call last):
+        ...
+    flanpy.UndecidedSystemError: could not decide whether the system is well-posed.
+      It has negative coefficients, and the nilpotency test fails. At z = 0 the
+      constant terms are F(0) = 0 and the Jacobian dPhi/dF is [[-1]], which is not
+      nilpotent: the dependency cycle F -> F has no factor z. For systems with
+      negative coefficients this failure does not prove divergence.
+      Equations:
+        F = -F + z
     """
 
 
 class ZeroCoordinateWarning(UserWarning):
-    """Some unknowns of a :class:`System` are identically zero."""
+    """Some unknowns of a :class:`System` are identically zero.
+
+    Examples
+    --------
+    >>> import warnings
+    >>> from sympy import symbols
+    >>> from flanpy import System
+    >>> z, F, G = symbols("z F G")
+    >>> with warnings.catch_warnings(record=True) as caught:
+    ...     warnings.simplefilter("always")
+    ...     system = System({F: z + G, G: G}, z=z)
+    >>> print(caught[0].message)
+    G is identically 0 (zero coordinate).
+      Every iterate from 0 is 0 there, so the solution keeps it as 0. Pivoteau,
+      Salvy & Soria (2012, arXiv:1109.2688v2, Def. 5.3) exclude such systems.
+      Remove this unknown if this is not intended.
+    """
 
 
 _Exprs = tuple[Any, ...]  # tuples of sympy expressions (sympy is untyped)
@@ -179,10 +251,16 @@ class System:
 
     An ill-posed system: ``F = F + z`` never fixes the coefficient of ``z``.
 
-    >>> System({F: F + z}, z=z)  # doctest: +ELLIPSIS
+    >>> System({F: F + z}, z=z)
     Traceback (most recent call last):
         ...
-    flanpy.IllPosedSystemError: the system is ill-posed: ...
+    flanpy.IllPosedSystemError: the system is ill-posed.
+      The iteration from 0 does not converge. At z = 0 the constant terms are
+      F(0) = 0 and the Jacobian dPhi/dF is [[1]], which is not nilpotent: the
+      dependency cycle F -> F has no factor z. (Non-negative system: Pivoteau,
+      Salvy & Soria 2012, arXiv:1109.2688v2, Thm 5.5 and Thm 3.6.)
+      Equations:
+        F = F + z
     """
 
     __slots__ = (
@@ -229,12 +307,32 @@ class System:
 
     @property
     def unknowns(self) -> tuple[sp.Symbol, ...]:
-        """The unknowns ``F_1..F_m``, in the order of the input mapping."""
+        """The unknowns ``F_1..F_m``, in the order of the input mapping.
+
+        Examples
+        --------
+        >>> from sympy import symbols
+        >>> from flanpy import System
+        >>> z, F = symbols("z F")
+        >>> System({F: 1 + z * F**2}, z=z).unknowns
+        (F,)
+        """
         return self._unknowns
 
     @property
     def equations(self) -> Mapping[sp.Symbol, sp.Expr]:
-        """Read-only mapping ``F_i -> Phi_i`` (right-hand sides expanded)."""
+        """Read-only mapping ``F_i -> Phi_i`` (right-hand sides expanded).
+
+        This is the fixed-point form ``F = Phi(z, k, F)``.
+
+        Examples
+        --------
+        >>> from sympy import symbols
+        >>> from flanpy import System
+        >>> z, F = symbols("z F")
+        >>> System({F: 1 + z * F**2}, z=z).equations
+        mappingproxy({F: F**2*z + 1})
+        """
         return MappingProxyType(dict(zip(self._unknowns, self._rhs, strict=True)))
 
     @property
@@ -259,6 +357,18 @@ class System:
         -------
         tuple of sympy.Poly
             One polynomial per unknown, in the order of :attr:`unknowns`.
+
+        Examples
+        --------
+        All regular expressions over ``k`` letters, Broda et al. (2020),
+        grammar (1):
+
+        >>> from sympy import symbols
+        >>> from flanpy import System
+        >>> z, k, R = symbols("z k R")
+        >>> rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
+        >>> rk.polynomials()
+        (Poly(-2*R**2*z - R*z + R - z*k - z, R, z, k, domain='QQ'),)
         """
         gens = (*self._unknowns, self._z, *self._params)
         return tuple(
@@ -287,6 +397,17 @@ class System:
             If the system has no parameter, or ``k < 1``.
         TypeError
             If ``k`` is not an ``int``.
+
+        Examples
+        --------
+        Regular expressions over 2 letters, Broda et al. (2020), grammar (1):
+
+        >>> from sympy import symbols
+        >>> from flanpy import System
+        >>> z, k, R = symbols("z k R")
+        >>> rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
+        >>> rk.specialize(2)
+        System({R: 2*R**2*z + R*z + 3*z}, z=z)
         """
         if self._k is None:
             raise ValueError("the system has no parameter k to specialize")
@@ -537,13 +658,17 @@ class _Check:
                     nonzero[i] = changed = True
         zeros = [str(self.s._unknowns[i]) for i in range(m) if not nonzero[i]]
         if zeros:
+            one = len(zeros) == 1
             warnings.warn(
-                f"the solution has zero coordinates: {', '.join(zeros)} "
-                f"{'is' if len(zeros) == 1 else 'are'} identically 0 (every iterate "
-                "from 0 is 0) and kept as 0. Pivoteau, Salvy & Soria (2012, "
-                "arXiv:1109.2688v2, Def. 5.3) exclude such systems. Remove "
-                f"{'this unknown' if len(zeros) == 1 else 'these unknowns'} if this "
-                "is not intended.",
+                f"{', '.join(zeros)} {'is' if one else 'are'} identically 0 "
+                f"(zero coordinate{'' if one else 's'}).\n"
+                + _wrap(
+                    "Every iterate from 0 is 0 there, so the solution keeps "
+                    f"{'it' if one else 'them'} as 0. Pivoteau, Salvy & Soria (2012, "
+                    "arXiv:1109.2688v2, Def. 5.3) exclude such systems. Remove "
+                    f"{'this unknown' if one else 'these unknowns'} if this is not "
+                    "intended."
+                ),
                 ZeroCoordinateWarning,
                 # Point at the caller's code, from any depth inside flanpy.
                 skip_file_prefixes=(os.path.dirname(__file__),),
@@ -600,10 +725,10 @@ class _Check:
         )
 
     def _jacobian_failure(self, jac: Any, syms: Sequence[Any], c_star: _Exprs) -> None:
-        cycle = " -> ".join(str(syms[i]) for i in _support_cycle(jac))
+        cycle = _keep(" -> ".join(str(syms[i]) for i in _support_cycle(jac)))
         where = (
             f"At z = 0 the constant terms are {_fmt(syms, c_star)} and the Jacobian "
-            f"dPhi/dF is {sp.sstr(jac.tolist())}, which is not nilpotent: the "
+            f"dPhi/dF is {_keep(sp.sstr(jac.tolist()))}, which is not nilpotent: the "
             f"dependency cycle {cycle} has no factor z."
         )
         if self.nonnegative:
@@ -629,34 +754,62 @@ class _Check:
         by_support: bool = False,
     ) -> NoReturn:
         s = self.s
-        lines = [message, "  Equations:"]
+        # A short headline, then the details wrapped and indented.
+        headline, _, detail = message.partition(": ")
+        lines = [headline + ".", _wrap(detail[0].upper() + detail[1:]), "  Equations:"]
         lines += [
             f"    {f} = {sp.sstr(phi)}"
             for f, phi in zip(s._unknowns, s._rhs, strict=True)
         ]
         if kind is IllPosedSystemError and self.uses_k:
             if by_support and not self.vanishes_at_1:
-                lines.append(
-                    "  This holds for every integer k >= 1 (no coefficient vanishes "
+                note = (
+                    "This holds for every integer k >= 1 (no coefficient vanishes "
                     "there, so the support of the system does not change)."
                 )
             elif by_support:
-                lines.append(
-                    "  This holds for every integer k >= 2. At k = 1 some "
+                note = (
+                    "This holds for every integer k >= 2. At k = 1 some "
                     "coefficients vanish, so k = 1 is not covered: use "
                     "specialize(1) to check it."
                 )
             else:
-                lines.append(
-                    "  This holds for symbolic k; finitely many values of k may "
+                note = (
+                    "This holds for symbolic k; finitely many values of k may "
                     "behave differently."
                 )
+            lines.append(_wrap(note))
         raise kind("\n".join(lines))
+
+
+_NBSP = "\u00a0"  # keeps formulas such as "F(0) = 0" on one line when wrapping
+
+
+def _keep(text: str) -> str:
+    """Make the spaces in ``text`` unbreakable for :func:`_wrap`."""
+    return text.replace(" ", _NBSP)
+
+
+def _wrap(text: str) -> str:
+    """Wrap a message paragraph at 78 columns, indented by two spaces."""
+    # Keep citations such as "Thm 5.5" and "Def. 5.3" on one line.
+    text = re.sub(r"\b(Thm|Def\.) (\d)", rf"\1{_NBSP}\2", text)
+    wrapped = textwrap.fill(
+        text,
+        width=78,
+        initial_indent="  ",
+        subsequent_indent="  ",
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+    return wrapped.replace(_NBSP, " ")
 
 
 def _fmt(syms: Sequence[Any], values: _Exprs) -> str:
     return (
-        ", ".join(f"{f}(0) = {sp.sstr(v)}" for f, v in zip(syms, values, strict=True))
+        ", ".join(
+            _keep(f"{f}(0) = {sp.sstr(v)}") for f, v in zip(syms, values, strict=True)
+        )
         or "(none)"
     )
 

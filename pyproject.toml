@@ -36,6 +36,7 @@ dependencies = [
 [project.optional-dependencies]
 fast = ["python-flint>=0.7"]
 dev = [
+    "numpydoc>=1.8",
     "pytest>=9.0",
     "ruff>=0.15",
     "mypy>=2.0",
@@ -119,9 +120,9 @@ files = ["src", "tests", "examples"]
 strict = true
 warn_unreachable = true
 
-# SymPy ships no type information (no py.typed marker).
+# SymPy and numpydoc ship no type information (no py.typed marker).
 [[tool.mypy.overrides]]
-module = ["sympy", "sympy.*"]
+module = ["sympy", "sympy.*", "numpydoc", "numpydoc.*"]
 ignore_missing_imports = true
 
 # python-flint is optional (the `fast` extra); it ships py.typed when installed.

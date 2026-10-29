@@ -161,7 +161,7 @@ ILL_POSED = [
 def test_ill_posed(equations: Mapping[Any, Any], kk: Any, phrases: list[str]) -> None:
     with pytest.raises(IllPosedSystemError, match=r"^the system is ill-posed") as info:
         System(equations, z=z, k=kk)
-    message = str(info.value)
+    message = " ".join(str(info.value).split())  # messages are wrapped
     for phrase in phrases:
         assert phrase in message
     assert isinstance(info.value, WellPosednessError)
@@ -171,8 +171,9 @@ def test_ill_posed(equations: Mapping[Any, Any], kk: Any, phrases: list[str]) ->
 def test_undecided_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     # The signed two-step example needs 2 iterations; a cap of 1 cannot decide it.
     monkeypatch.setattr("flanpy._system._signed_cap", lambda m: 1)
-    with pytest.raises(UndecidedSystemError, match="did not stabilise within 1 "):
+    with pytest.raises(UndecidedSystemError) as info:
         System(TWO_STEP, z=z)
+    assert "did not stabilise within 1 " in " ".join(str(info.value).split())
 
 
 def test_undecided_unbounded_constant_terms() -> None:
