@@ -24,7 +24,9 @@ Reference papers (uploaded to the Claude project):
 
 - **Name**: `flanpy` (PyPI distribution name and import name: `import flanpy`).
 - **Name history**: `pyflan` was rejected by PyPI on 2026-10-29 as too similar to `pyfian`; check any future name against look-alikes (l/i/1, o/0, separators) before using it.
-- **Repository**: `git@github.com:gmcmduarte/flanpy.git` (GitHub, created; remote `origin`).
+- **Repository**: `git@github.com:gmcmduarte/flanpy.git` (GitHub, public; remote `origin`).
+- **PyPI**: https://pypi.org/project/flanpy/ (0.0.1.dev0 released 2026-10-29, tag `v0.0.1.dev0`).
+- **Docs**: https://flanpy.readthedocs.io/ (Read the Docs, builds `latest` on every push to `main` and on pull requests).
 - **Author**: Guilherme Duarte (for `pyproject.toml`, `CITATION.cff` and licence headers). Add the other group members later if/when the group decides.
 - **Python**: `requires-python >= 3.13`; CI also on the newest release.
 - **Licence**: GPL-3.0-or-later (compatible with SymPy BSD, python-flint MIT, Sage GPL). Confirmed by the supervisors and the institution. Add an SPDX header to every source file.
@@ -97,8 +99,18 @@ mypy                                 # strict, src + tests
 sphinx-build -W --keep-going docs docs/_build/html
 sphinx-build -W --keep-going -b doctest docs docs/_build/doctest
 python -m build                      # sdist + wheel into dist/
-twine check dist/*                   # release metadata check
+python -m twine check dist/*         # release metadata check
 ```
+
+## Releasing
+
+Manual for now (until trusted publishing is set up). From a clean `main` that CI has passed:
+
+1. Build: `rm -rf dist && python -m build`.
+2. Check: `python -m twine check dist/*`.
+3. Upload: `TWINE_USERNAME=__token__ python -m twine upload dist/flanpy-<version>*` (use `python -m twine`, not the `twine` script, which can carry a stale interpreter path).
+4. Tag the uploaded commit: `git tag -a v<version> <commit> -m "flanpy <version>"` and `git push origin v<version>`.
+5. Bump the version in `pyproject.toml` and `CITATION.cff` to the next `.devN` in a separate commit.
 
 ### Documentation (decided)
 
@@ -115,7 +127,8 @@ twine check dist/*                   # release metadata check
 ## Open items
 
 - [x] Tooling: pytest, ruff, mypy (strict) set up. Shibuya 2026.7.12 builds cleanly with Sphinx 9.2.0 on Python 3.13 (`-W`, no warnings); tests and mypy also pass on Python 3.15.
-- Read the Docs: import the GitHub project on readthedocs.org (needs the maintainer's RTD account); `.readthedocs.yaml` is ready.
-- PyPI: `flanpy` (and look-alikes `fianpy`, `f1anpy`, `flan-py`) was free on 2026-10-29; reserve it by uploading `0.0.1.dev0` manually with `twine` (maintainer's token).
+- [x] Read the Docs: project `flanpy` imported 2026-10-29; https://flanpy.readthedocs.io/ (pull-request builds enabled).
+- [x] PyPI: name reserved with `0.0.1.dev0` on 2026-10-29; https://pypi.org/project/flanpy/.
+- User action (Guilherme): replace the account-wide PyPI token with a project-scoped token for `flanpy`.
 - PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
 - Remaining technical risk: roots of characteristic polynomials that are not expressible in radicals (see Decisions), and Case I curves with larger systems, where the Groebner step may be slow. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.
