@@ -217,7 +217,12 @@ It uses only the private attributes of `System` that `system.md` §7 documents
 ## 6. Measurements
 
 Source: `dev/spikes/series_spike.py`, run on an Apple M1 (16 GB), macOS 27.0.1,
-Python 3.13.16, python-flint 0.9.0, SymPy 1.14.0 (pure-Python ground types, no gmpy2).
+Python 3.13.16, python-flint 0.9.0, SymPy 1.14.0. SymPy picks its ground types
+automatically and uses flint when python-flint is installed, which it was. So the
+"Python `ZZ[k]`" rows below used SymPy's sparse polynomials over flint integers.
+Re-timing with `SYMPY_GROUND_TYPES=python` (pure Python, no gmpy2) changes them by
+under 15% (e.g. `L_k`, `N = 200`: 3.2 s against 3.8 s). The fixed-`k` Python rows use
+plain `int` and do not depend on SymPy's ground types.
 Timings are single runs, in seconds. The spike first cross-checks that every algorithm and
 backend agree, that the results match the enumerator values, and that symbolic `k`
 evaluated at `k ∈ {1, 2, 3, 7}` matches fixed `k`. All checks pass.
