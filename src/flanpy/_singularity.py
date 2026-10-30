@@ -831,19 +831,27 @@ def _window_test(
             break
     else:  # pragma: no cover - finitely many bad points
         raise RuntimeError("no certified enclosure below rho")
-    assert isinstance(result, _Below), "x0 < ρ"
+    if not isinstance(result, _Below):  # pragma: no cover - x0 < ρ by the search
+        raise RuntimeError(f"the comparison contradicts {x0} < ρ")
     i = closure.unknowns.index(w)
     fiber = sp.Poly(g.as_expr().subs(z, sp.Rational(x0.numerator, x0.denominator)), w)
     round_ = 0
     while True:
         lo, hi = result.lower[i], result.upper[i]
         count = fiber.count_roots(_q(lo), _q(hi))
-        assert count >= 1, "w(x0) is a root of G(x0, ·)"
+        if count < 1:  # pragma: no cover - w(x0) is a root of G(x0, ·)
+            raise RuntimeError(f"the enclosure of w({x0}) holds no root of G({x0}, ·)")
         if count == 1:
             break
         round_ += 1  # tighten the enclosure: more precision
         tighter = _compare(closure, x0, first_round=round_)
-        assert isinstance(tighter, _Below)
+        if tighter is None:  # pragma: no cover - the enclosure shrinks to w(x0)
+            raise RuntimeError(
+                f"the enclosure of w({x0}) holds {count} roots of G({x0}, ·) "
+                "after the last round"
+            )
+        if not isinstance(tighter, _Below):  # pragma: no cover - x0 < ρ is proved
+            raise RuntimeError(f"the comparison contradicts {x0} < ρ")
         result = tighter
     windows = [None, *separators, None]
     for j in range(len(windows) - 1):
@@ -852,7 +860,10 @@ def _window_test(
         right = hi if b is None else min(hi, b)
         if left <= right and fiber.count_roots(_q(left), _q(right)) == 1:
             break
-    assert j > 0, "a non-negative series does not tend to -oo"
+    else:  # pragma: no cover - w(x0) is no separator: G(x0, q_j) != 0
+        raise RuntimeError(f"no window between the separators holds w({x0})")
+    if j == 0:  # pragma: no cover - a non-negative series does not tend to -oo
+        raise RuntimeError(f"w({x0}) lies below every root of N")
     if j == len(separators):
         return "II", None
     a_value = roots[j - 1]
@@ -876,7 +887,8 @@ def _check_branch_point(g: sp.Poly, rho: AlgebraicReal, a: AlgebraicReal) -> Non
         scale = 1 + sum(abs(c) for c in g.coeffs()) * (1 + abs(point[w])) ** g.degree(w)
         for p in (g.as_expr(), sp.diff(g.as_expr(), w)):
             value = abs(sp.N(p.subs(point), 50))
-            assert value < scale * sp.Float(10) ** -35, "(ρ, a) is not a branch point"
+            if not value < scale * sp.Float(10) ** -35:  # pragma: no cover
+                raise RuntimeError(f"(ρ, a) = ({rho}, {a}) is not a branch point")
 
 
 # -- period (singularity.md, section 5.2) -------------------------------------------
