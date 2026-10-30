@@ -1493,9 +1493,39 @@ def _locate(closure: _Closure, positive: list[AlgebraicReal]) -> int:
 # -- Case I / II and a: the window test (singularity.md, section 4.1) ---------------
 
 
+@dataclass(frozen=True)
+class _Window:
+    """The data of the window test, also used by step 5 (newton.md, section 3.3).
+
+    ``x0 < ρ`` is rational with no candidate in ``[x0, ρ)``; ``separators`` separate
+    the real roots of ``N = Res_z(m_ρ, G)``; ``w``'s window is
+    ``(left, right)`` (``None`` for ``∓∞``): ``(q_{j-1}, q_j)`` with ``a`` in it in
+    Case I, the top window ``(q_s, ∞)`` in Case II; ``[lower, upper]`` encloses
+    ``w(x0)`` and holds exactly one root of ``G(x0, ·)``.
+    """
+
+    case: Case
+    a: AlgebraicReal | None
+    x0: Fraction
+    separators: tuple[Fraction, ...]
+    left: Fraction | None
+    right: Fraction | None
+    lower: Fraction
+    upper: Fraction
+
+
 def _window_test(
     g: sp.Poly, closure: _Closure, rho: AlgebraicReal, previous: Fraction
 ) -> tuple[Case, AlgebraicReal | None]:
+    """Case I / II and ``a`` (singularity.md, section 4.1)."""
+    window = _window(g, closure, rho, previous)
+    return window.case, window.a
+
+
+def _window(
+    g: sp.Poly, closure: _Closure, rho: AlgebraicReal, previous: Fraction
+) -> _Window:
+    """Run the window test and return its data (singularity.md, section 4.1)."""
     w, z = g.gens
     m_rho = rho.polynomial.as_expr().subs(rho.polynomial.gen, z)
     norm = sp.Poly(sp.resultant(m_rho, g.as_expr(), z), w, domain=sp.QQ)
@@ -1557,11 +1587,31 @@ def _window_test(
         raise RuntimeError(f"no window between the separators holds w({x0})")
     if j == 0:  # pragma: no cover - a non-negative series does not tend to -oo
         raise RuntimeError(f"w({x0}) lies below every root of N")
+    data = (x0, tuple(separators), windows[j], windows[j + 1], lo, hi)
     if j == len(separators):
-        return "II", None
+        return _Window("II", None, *data)
     a_value = roots[j - 1]
     _check_branch_point(g, rho, a_value)
-    return "I", a_value
+    return _Window("I", a_value, *data)
+
+
+def _window_of(s: Singularity[AlgebraicReal]) -> _Window:
+    """Recompute the window data of a fixed-``k`` singularity (for step 5).
+
+    The closure, the candidates and the candidate below ``ρ`` are recomputed as in
+    :func:`_analysis`; ``ρ`` is found among the positive candidates by exact
+    equality, so the result agrees with the analysis that produced ``s``.
+    """
+    curve = s.curve
+    w, z = curve.w, curve.z
+    g = sp.Poly(curve.polynomial.as_expr(), w, z, domain=sp.QQ)
+    found = _closure(curve.system, w)
+    assert found is not None  # s exists, so w is not identically 0
+    closure = _Closure(z, found[0], found[1])
+    positive = _positive_roots(_candidates(g))
+    index = positive.index(s.rho)
+    previous = positive[index - 1].interval[1] if index else Fraction(0)
+    return _window(g, closure, s.rho, previous)
 
 
 def _q(x: Fraction) -> sp.Rational:
