@@ -47,18 +47,20 @@ quarter = AlgebraicReal(4 * z - 1, 0)  # Catalan's radius
 print(quarter == Fraction(1, 4), {quarter, Fraction(1, 4)})
 ```
 
-## The polynomial must be minimal
+## The polynomial must be irreducible
 
-The polynomial is checked: integer coefficients, primitive, positive leading
-coefficient, and irreducible over $\mathbb{Q}$. A polynomial that factors is rejected
-rather than silently replaced. For example, $p_k$ of {cite:t}`broda-2020-sigact`
-eq. (18) is irreducible for symbolic $k$, but at $k = 54$ it factors, and its positive
-root is rational:
+The polynomial is normalised silently: rational coefficients, a sign or a common
+factor do not change the roots, so `1 - 4z` and `z/2 - 1/8` give the same number as
+`4z - 1`. A polynomial that factors is rejected rather than replaced, because then the
+index would not say which factor is meant. For example, $p_k$ of
+{cite:t}`broda-2020-sigact` eq. (18) is irreducible for symbolic $k$, but at $k = 54$
+it factors, and its positive root is rational:
 
 ```{code-cell} python
 from sympy import factor
 
-p54 = (4 * 54 * (2 * 54 + 27) * z**3 + 36 * 54 * z**2 - 54 * z - 4) / 2  # primitive
+print(AlgebraicReal(1 - 4 * z, 0) == quarter)
+p54 = 4 * 54 * (2 * 54 + 27) * z**3 + 36 * 54 * z**2 - 54 * z - 4
 print(factor(p54))
 try:
     AlgebraicReal(p54, 1)

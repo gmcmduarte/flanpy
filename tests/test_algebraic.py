@@ -19,6 +19,7 @@ import flanpy
 from flanpy._algebraic import (
     AlgebraicReal,
     _negative,
+    _OnCircle,
     _others_on_circle,
     _positive_roots,
     _real_roots,
@@ -70,18 +71,12 @@ def test_construction_and_attributes() -> None:
     ("polynomial", "index", "error", "message"),
     [
         (z**2 - 1, 0, ValueError, r"not irreducible over Q: factors z - 1, z \+ 1"),
-        (z / 2 - 1, 0, ValueError, "integer coefficients; use z - 2"),
-        (
-            2 * z - 2,
-            0,
-            ValueError,
-            "primitive with a positive leading coefficient; use z - 1",
-        ),
-        (1 - 4 * z, 0, ValueError, "use 4\\*z - 1"),
         (z**2 + 1, 0, ValueError, "has 0 real root\\(s\\); index 0 is out of range"),
         (z**2 - 2, 2, ValueError, "index 2 is out of range"),
         (z**2 - 2, -1, ValueError, "index -1 is out of range"),
         (sp.Integer(3), 0, ValueError, "degree >= 1"),
+        (sp.Integer(0), 0, ValueError, "non-zero"),
+        (4 * z**2 - 4, 0, ValueError, r"z\*\*2 - 1 is not irreducible"),
         (z * w - 1, 0, ValueError, "univariate"),
         (sp.sqrt(2) * z - 1, 0, ValueError, "rational coefficients"),
         (1 / z, 0, ValueError, "polynomial"),
@@ -95,6 +90,19 @@ def test_validation(
 ) -> None:
     with pytest.raises(error, match=message):
         AlgebraicReal(polynomial, index)  # type: ignore[arg-type]
+
+
+def test_normalised_silently() -> None:
+    """Rational coefficients, sign and content do not change the roots."""
+    quarter = AlgebraicReal(4 * z - 1, 0)
+    for same in (1 - 4 * z, 8 * z - 2, z / 2 - sp.Rational(1, 8), -12 * z + 3):
+        a = AlgebraicReal(same, 0)
+        assert a == quarter and a.polynomial == quarter.polynomial
+    assert AlgebraicReal(z / 2 - 1, 0) == 2
+    b = AlgebraicReal(sp.Poly(-2 * z**2 + 4, z, domain="QQ"), 1)
+    assert b == SQRT2 and repr(b) == "AlgebraicReal(z**2 - 2, 1)"
+    # the index refers to the same roots: -z**2 + 2 has roots -sqrt 2 < sqrt 2
+    assert AlgebraicReal(2 - z**2, 0) < 0 < AlgebraicReal(2 - z**2, 1)
 
 
 def test_value_semantics() -> None:
@@ -308,41 +316,50 @@ def candidates_of_lk(n: int) -> tuple[sp.Expr, AlgebraicReal]:
 
 def test_circle_periodic_and_conjugate_pairs() -> None:
     # T = z + z T^2: curve z T^2 - T + z, candidates z (1 - 4 z^2); -1/2 on the circle
-    assert _others_on_circle(z * (1 - 4 * z**2), AlgebraicReal(2 * z - 1, 0)) == [-0.5]
+    found = _others_on_circle(z * (1 - 4 * z**2), AlgebraicReal(2 * z - 1, 0))
+    assert found == _OnCircle(False, [-0.5])
     # -rho a root of m_rho itself
-    assert _others_on_circle(z**2 - 2, SQRT2) == [pytest.approx(-(2**0.5))]
+    found = _others_on_circle(z**2 - 2, SQRT2)
+    assert not found.proved_none and found.roots == pytest.approx([-(2**0.5)])
     # a conjugate pair e^{±iπ/3} on the unit circle
     found = _others_on_circle((z - 1) * (z**2 - z + 1), AlgebraicReal(z - 1, 0))
-    assert found == [
-        pytest.approx(complex(0.5, -(3**0.5) / 2)),
-        pytest.approx(complex(0.5, 3**0.5 / 2)),
-    ]
+    expected = [complex(0.5, -(3**0.5) / 2), complex(0.5, 3**0.5 / 2)]
+    assert not found.proved_none and found.roots == pytest.approx(expected)
 
 
-def test_circle_none() -> None:
-    one = AlgebraicReal(z - 1, 0)
-    # a real pair with product rho^2 = 1 (1/2 and 2) is not on the circle
-    assert _others_on_circle((z - 1) * (2 * z - 1) * (z - 2), one) == []
-    # a conjugate pair on another circle (|e^{2iπ/3}| = 1 vs rho = 1/2)
-    assert (
-        _others_on_circle((2 * z - 1) * (z**2 + z + 1), AlgebraicReal(2 * z - 1, 0))
-        == []
-    )
-    # the factor z is skipped
-    assert _others_on_circle(z * (4 * z - 1), AlgebraicReal(4 * z - 1, 0)) == []
+def test_circle_none_proved() -> None:
+    quarter = AlgebraicReal(4 * z - 1, 0)
+    # the factor z is skipped; -1 and 1/4 are on other circles
+    assert _others_on_circle(z * (4 * z - 1) * (z + 1), quarter) == _OnCircle(True, [])
+    # a conjugate pair on another circle (|e^{2iπ/3}| = 1 vs rho = 1/2): c = 0
+    half = AlgebraicReal(2 * z - 1, 0)
+    assert _others_on_circle((2 * z - 1) * (z**2 + z + 1), half) == _OnCircle(True, [])
     with pytest.raises(ValueError, match="positive"):
         _others_on_circle(z + 1, AlgebraicReal(z + 1, 0))
 
 
+def test_circle_none_numerical() -> None:
+    one = AlgebraicReal(z - 1, 0)
+    # 1/2 and 2 have product rho^2 = 1, but they are roots of different (linear)
+    # factors: pairs are only formed within one factor, so this is proved
+    assert _others_on_circle((z - 1) * (2 * z - 1) * (z - 2), one) == _OnCircle(
+        True, []
+    )
+    # the two real roots (3 ± sqrt 5)/2 of one irreducible factor have product 1:
+    # c > 0, the pair is not conjugate, so nothing is on the circle, but that is a
+    # numerical conclusion and proved_none is False (unique = None in step 4)
+    assert _others_on_circle((z - 1) * (z**2 - 3 * z + 1), one) == _OnCircle(False, [])
+
+
 @pytest.mark.parametrize("n", [1, 2, 10, 50, 53, 54, 55, 100])
 def test_circle_broda_lk(n: int) -> None:
-    """Broda et al. 2020 §3.4: rho_k is the only candidate on its circle."""
+    """Broda et al. 2020 §3.4: rho_k is the only candidate on its circle, proved."""
     candidates, rho = candidates_of_lk(n)
-    assert _others_on_circle(candidates, rho) == []
+    assert _others_on_circle(candidates, rho) == _OnCircle(True, [])
 
 
 @pytest.mark.slow
 def test_circle_broda_lk_range() -> None:
     for n in range(1, 61):
         candidates, rho = candidates_of_lk(n)
-        assert _others_on_circle(candidates, rho) == [], n
+        assert _others_on_circle(candidates, rho) == _OnCircle(True, []), n

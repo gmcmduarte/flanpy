@@ -20,7 +20,7 @@ import itertools
 import math
 from collections.abc import Callable, Sequence
 from fractions import Fraction
-from typing import Any, NoReturn
+from typing import Any, NamedTuple, NoReturn
 
 import mpmath
 import sympy as sp
@@ -88,17 +88,19 @@ class AlgebraicReal:
     """A real algebraic number: a minimal polynomial and the index of a real root.
 
     The number is the ``index``-th real root, in increasing order from ``0``, of
-    ``polynomial``, which must be its minimal polynomial over ``Q``: irreducible,
-    with integer coefficients, primitive and with a positive leading coefficient.
-    This is the same indexing as :class:`sympy.CRootOf`. The pair is canonical, so
-    equality and hashing are exact. An isolating interval with rational endpoints
+    ``polynomial``, which must be irreducible over ``Q``. It is stored normalised,
+    as the minimal polynomial with integer coefficients, primitive and with a
+    positive leading coefficient: rational coefficients, a sign or a content are
+    removed silently, since they do not change the roots. This is the same
+    indexing as :class:`sympy.CRootOf`. The pair is canonical, so equality and
+    hashing are exact. An isolating interval with rational endpoints
     is kept as a cache and narrowed when needed (singularity.md, section 2.1).
 
     Parameters
     ----------
     polynomial : sympy.Poly or sympy.Expr
-        The minimal polynomial, univariate. The name of its variable is kept for
-        printing but does not affect equality.
+        An irreducible univariate polynomial with rational coefficients. The name
+        of its variable is kept for printing but does not affect equality.
     index : int
         Which real root, ``0 <= index < number of real roots``.
 
@@ -107,9 +109,8 @@ class AlgebraicReal:
     TypeError
         If ``index`` is not an integer, or ``polynomial`` is not a polynomial.
     ValueError
-        If ``polynomial`` is not univariate with integer coefficients, primitive,
-        with a positive leading coefficient and irreducible over ``Q``, or has no
-        real root of that index.
+        If ``polynomial`` is zero, constant, not univariate with rational
+        coefficients, or reducible over ``Q``, or has no real root of that index.
 
     See Also
     --------
@@ -151,6 +152,8 @@ class AlgebraicReal:
 
     >>> AlgebraicReal(4 * z - 1, 0) == Fraction(1, 4)
     True
+    >>> AlgebraicReal(1 / 8 - z / 2, 0)  # normalised: the same root
+    AlgebraicReal(4*z - 1, 0)
     >>> AlgebraicReal(z**2 - 1, 0)
     Traceback (most recent call last):
         ...
@@ -168,20 +171,13 @@ class AlgebraicReal:
         if isinstance(index, bool) or not isinstance(index, int):
             raise TypeError(f"index must be an int, got {index!r}")
         poly = _as_poly(polynomial, "polynomial")
-        expr = poly.as_expr()
+        if poly.is_zero:
+            raise ValueError("polynomial must be non-zero")
         if poly.degree() < 1:
-            raise ValueError(f"polynomial must have degree >= 1, got {expr}")
-        if any(not c.is_integer for c in poly.all_coeffs()):
-            raise ValueError(
-                f"{expr} must have integer coefficients; use "
-                f"{_normalised(poly).as_expr()}"
-            )
-        zz = poly.set_domain(sp.ZZ)
-        if zz.content() != 1 or zz.LC() < 0:
-            raise ValueError(
-                f"{expr} must be primitive with a positive leading coefficient; use "
-                f"{_normalised(poly).as_expr()}"
-            )
+            raise ValueError(f"polynomial must have degree >= 1, got {poly.as_expr()}")
+        # Rational coefficients, sign and content do not change the roots.
+        zz = _normalised(poly)
+        expr = zz.as_expr()
         _, factors = zz.factor_list()
         if len(factors) != 1 or factors[0][1] != 1:
             names = ", ".join(sp.sstr(f.as_expr()) for f, _ in factors)
@@ -725,27 +721,54 @@ def _reciprocal(theta: AlgebraicReal) -> AlgebraicReal:
 # -- the circle test (singularity.md, section 5.1) ---------------------------------
 
 
+class _OnCircle(NamedTuple):
+    """The other candidates on ``|z| = ρ``, and how that was established.
+
+    ``proved_none`` is ``True`` only when the exact tests exclude every root
+    ``σ != ρ`` with ``|σ| = ρ`` (then ``roots`` is empty). Otherwise ``roots`` holds
+    what is on the circle: ``-ρ`` (found exactly) and conjugate pairs (identified
+    numerically, after an exact test). ``roots`` can then be empty, when the pairs
+    with product ``ρ^2`` are not conjugate: that is a numerical conclusion, and the
+    caller treats it as undecided (singularity.md, section 5.3).
+    """
+
+    proved_none: bool
+    roots: list[complex]
+
+
 def _others_on_circle(
     candidates: sp.Poly | sp.Expr, rho: AlgebraicReal, *, dps: int = 30
-) -> list[complex]:
+) -> _OnCircle:
     """Return the roots ``σ != ρ`` of ``candidates`` with ``|σ| = ρ`` (``ρ > 0``).
 
-    They are returned sorted by argument.
-
-    *Existence is decided exactly*, factor by factor ``f`` (the factor ``z`` is
-    skipped: ``0`` is never on the circle, and ``P_z`` is degenerate):
+    Factor by factor ``f`` of ``candidates`` (the factor ``z`` is skipped: ``0`` is
+    never on the circle, and ``P_z`` is degenerate):
 
     - a real root ``σ = -ρ``: ``f(-ρ) = 0``, an exact sign test;
-    - a non-real root: ``σσ̄ = ρ^2``, so ``ρ^2`` is a root of
-      ``P_f / G_f`` (products ``σ_i σ_j``, ``i != j``), with
-      ``P_f(y) = Res_x(f(x), x^d f(y/x))`` and ``G_f(y) = Res_x(f(x), y - x^2)``;
-      decided by ``gcd(P_f / G_f, m_{ρ²}) != 1``.
+    - a non-real root has ``σσ̄ = ρ^2``, so ``ρ^2`` is a product ``σ_i σ_j``
+      (``i != j``) of two roots of ``f``. Those products are the roots of
+      ``Q_f = P_f / G_f``, with ``P_f(y) = Res_x(f(x), x^d f(y/x))`` (all ordered
+      pairs) and ``G_f(y) = Res_x(f(x), y - x^2)`` (the pairs ``i = j``). The
+      number ``c`` of ordered pairs with product exactly ``ρ^2`` is the
+      multiplicity in ``Q_f`` of ``μ``, the minimal polynomial of ``ρ^2``
+      (exact: ``μ`` is irreducible, so all its roots have the same
+      multiplicity). ``c = 0`` excludes the factor.
 
-    When the gcd test is positive, the numerical step identifies which conjugate
-    pairs are on the circle (a pair of real roots, or of non-conjugate roots, can
-    also have product ``ρ^2``), at increasing precision until the pair products
-    near ``ρ^2`` are separated from the others. The values are returned as
-    ``complex`` approximations.
+    If no factor has ``-ρ`` and every ``c`` is ``0``, the result is a proof that no
+    other candidate lies on the circle (``proved_none``). Otherwise the ``c / 2``
+    unordered pairs with product ``ρ^2`` are identified numerically: the roots of
+    ``f`` are computed with mpmath at increasing precision until exactly ``c / 2``
+    pair products lie within ``10^-(dps/2)`` of ``ρ^2`` and all others are at least
+    a thousand times farther. Those pairs exist (``c`` is exact) and the others are
+    at a positive distance from ``ρ^2``, so this terminates. The conjugate pairs
+    among them are on the circle.
+
+    That ``c > 0`` whenever ``gcd(Q_f, m_{ρ²}) != 1``, with
+    ``m_{ρ²} = Res_x(m_ρ(x), y - x^2)``: the gcd means that some square ``ρ'^2``
+    of a conjugate ``ρ'`` of ``ρ`` is a product ``σ_i σ_j``. An automorphism of the
+    splitting field with ``ρ' ↦ ρ`` maps ``σ_i, σ_j`` to two distinct roots of
+    ``f`` with product ``ρ^2``. So a pair with product exactly ``ρ^2`` exists and
+    the numerical step never looks for something that is not there.
 
     Examples
     --------
@@ -756,18 +779,20 @@ def _others_on_circle(
     >>> from flanpy._algebraic import AlgebraicReal, _others_on_circle
     >>> z = symbols("z")
     >>> _others_on_circle(z * (1 - 4 * z**2), AlgebraicReal(2 * z - 1, 0))
-    [(-0.5+0j)]
-    >>> _others_on_circle((z - 1) * (z**2 - z + 1), AlgebraicReal(z - 1, 0))
+    _OnCircle(proved_none=False, roots=[(-0.5+0j)])
+    >>> _others_on_circle((z - 1) * (z**2 - z + 1), AlgebraicReal(z - 1, 0)).roots
     [(0.5-0.8660254037844386j), (0.5+0.8660254037844386j)]
+    >>> _others_on_circle(z * (4 * z - 1) * (z + 1), AlgebraicReal(4 * z - 1, 0))
+    _OnCircle(proved_none=True, roots=[])
     """
     poly = _as_poly(candidates, "candidates")
     if rho <= 0:
         raise ValueError(f"rho must be positive, got {rho}")
     x = poly.gen
     y = sp.Dummy("y")
-    rx = rho.polynomial.as_expr().subs(rho.polynomial.gen, x)
-    m_rho2 = sp.Poly(sp.resultant(rx, y - x**2, x), y, domain=sp.QQ)
-    rho_value = rho.evalf(dps)
+    square = _square(rho).polynomial  # μ, the minimal polynomial of ρ^2
+    mu = sp.Poly(square.as_expr().subs(square.gen, y), y, domain=sp.QQ)
+    proved_none = True
     found: list[complex] = []
     _, factors = poly.factor_list()
     for factor, _ in factors:
@@ -775,7 +800,8 @@ def _others_on_circle(
         if f.degree() < 1 or f.as_expr() == x:
             continue
         if rho.sign(sp.Poly(f.as_expr().subs(x, -x), x, domain=sp.QQ)) == 0:
-            found.append(complex(-rho_value))
+            proved_none = False
+            found.append(complex(-rho.evalf(dps)))
         if f.degree() < 2:
             continue
         d = f.degree()
@@ -786,41 +812,47 @@ def _others_on_circle(
         squares = sp.Poly(sp.resultant(fe, y - x**2, x), y, domain=sp.QQ)
         pairs, remainder = products.div(squares)
         assert remainder.is_zero
-        if sp.gcd(pairs, m_rho2).degree() > 0:
-            found.extend(_conjugate_pairs_on_circle(f, rho, dps))
+        c = 0
+        while True:
+            quotient, remainder = pairs.div(mu)
+            if not remainder.is_zero:
+                break
+            pairs, c = quotient, c + 1
+        if c:
+            proved_none = False
+            found.extend(_conjugate_pairs_on_circle(f, rho, c // 2, dps))
     found.sort(key=lambda s: (math.atan2(s.imag, s.real), s.real))
-    return found
+    return _OnCircle(proved_none, found)
 
 
 def _conjugate_pairs_on_circle(
-    f: sp.Poly, rho: AlgebraicReal, dps: int
+    f: sp.Poly, rho: AlgebraicReal, count: int, dps: int
 ) -> list[complex]:
     """Return the non-real roots of ``f`` with ``σσ̄ = ρ^2`` (numerical).
 
-    Called once some pair of distinct roots is known to have product ``ρ^2``.
+    ``count`` unordered pairs of distinct roots have product exactly ``ρ^2``.
     """
     coeffs = [int(c) for c in f.all_coeffs()]
     while True:
         with mpmath.workdps(dps):
             target = rho.evalf(dps) ** 2
-            roots = mpmath.polyroots(coeffs, maxsteps=200, extraprec=4 * dps)
+            roots = mpmath.polyroots(coeffs, maxsteps=400, extraprec=4 * dps)
             tol = mpmath.mpf(10) ** (-(dps // 2))
-            near, far = [], mpmath.inf
-            for i, j in itertools.combinations(range(len(roots)), 2):
-                gap = abs(roots[i] * roots[j] - target)
-                if gap < tol:
-                    near.append((i, j))
-                else:
-                    far = min(far, gap)
-            if near and far > 1000 * tol:
+            gaps = sorted(
+                (abs(roots[i] * roots[j] - target), i, j)
+                for i, j in itertools.combinations(range(len(roots)), 2)
+            )
+            near = gaps[:count]
+            rest = gaps[count:]
+            if near[-1][0] < tol and (not rest or rest[0][0] > 1000 * tol):
                 out = []
-                for i, j in near:
+                for _, i, j in near:
                     a, b = roots[i], roots[j]
                     if abs(mpmath.im(a)) > tol and abs(a - mpmath.conj(b)) < tol:
                         out.extend([complex(a), complex(b)])
                 return out
         dps *= 2
-        if dps > 2000:
+        if dps > 4000:  # pragma: no cover - the loop terminates (see the caller)
             raise RuntimeError("could not identify the roots on the circle")
 
 
