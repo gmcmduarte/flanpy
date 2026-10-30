@@ -820,6 +820,55 @@ class KCases[T]:
             (s & t, f(a, b)) for s, a in self._pieces for t, b in other._pieces
         )
 
+    def flat_map[U](self, f: Callable[[T], KCases[U]]) -> KCases[U]:
+        """Replace every value by a ``KCases`` of its own, restricted to its piece.
+
+        For an analysis of each value that itself depends on ``k``: piece ``s`` with
+        value ``v`` contributes the pieces of ``f(v) & s``. The result is
+        uncovered where ``self`` is, and on each ``s`` where ``f(v)`` is
+        (singularity.md, section 7).
+
+        Parameters
+        ----------
+        f : callable
+            Maps a value to a :class:`KCases`.
+
+        Returns
+        -------
+        KCases
+            The pieces ``(t & s, u)`` for every piece ``(s, v)`` of ``self`` and
+            every piece ``(t, u)`` of ``f(v)``.
+
+        Raises
+        ------
+        TypeError
+            If ``f`` returns something other than a :class:`KCases`.
+
+        Examples
+        --------
+        >>> from flanpy._kset import KCases, KSet
+        >>> cases = KCases({KSet([(1, 9)]): "curve A", KSet([(10, None)]): "curve B"})
+        >>> def analyse(curve):
+        ...     if curve == "curve A":  # splits again at k = 5
+        ...         return KCases({KSet([(1, 4)]): "A, I", KSet([(5, None)]): "A, II"})
+        ...     return KCases({KSet([(1, 20)]): "B, I"})  # undecided beyond 20
+        >>> print(cases.flat_map(analyse))
+        [1, 4]: A, I
+        [5, 9]: A, II
+        [10, 20]: B, I
+        undecided: [21, ∞)
+        """
+        pieces: list[tuple[KSet, U]] = []
+        for s, value in self._pieces:
+            result = f(value)
+            if not isinstance(result, KCases):
+                raise TypeError(
+                    f"flat_map needs a function returning KCases, got "
+                    f"{type(result).__name__}"
+                )
+            pieces.extend((t & s, u) for t, u in result._pieces)
+        return KCases(pieces)
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, KCases):
             return NotImplemented
