@@ -2,7 +2,7 @@
 
 Open-source Python package implementing the analytic-combinatorics toolchain used by our research group (Broda, Machiavelo, Moreira, Reis, and Guilherme), so that papers can ship a runnable script that reproduces their results, instead of Mathematica files.
 
-This file holds the project's context, decisions and base rules. Build-order step 1 (`System`, `series`) is implemented; the later steps are not. Update this file when decisions change.
+This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`) and 2 (`KSet`) are implemented; the later steps are not. Update this file when decisions change.
 
 ## What the package does
 
@@ -52,6 +52,14 @@ Reference papers (in Guilherme's Zotero library):
 - **Zero coordinates** (unknowns identically 0) are accepted with a `ZeroCoordinateWarning`, kept as 0 (PSS exclude them; specialising can create them).
 - **`series` algorithm**: the recurrence `(I − J0) y_n = r_n` from the stabilised constant terms (`series.md` §2–3), `O(P N^2)` coefficient operations. One code path over a private coefficient-ring interface (`_rings.py`): python-flint (`fmpz`, `fmpq`, `fmpz_poly`, `fmpq_poly`) when installed, otherwise pure Python (`int`, `Fraction`, SymPy `ZZ[k]`/`QQ[k]`). Measured at `N = 1000` (Apple M1): `L_k`, `k = 50`, 1.3 s with flint, 9.4 s pure Python. Symbolic `k` is practical up to `N ≈ 200` (≈ 400 with flint). Newton iteration (PSS Thm 8.10) is faster from `N ≈ 2000` and can be added later behind the same interface.
 - **Erratum, Broda 2020 eq. (5)** (pending confirmation with the authors): for odd `n` the prefactor should be `(n − 1)/2^(n+1)`, not `(n − 1)/2^(n+2)` (e.g. `k = 1`, `n = 3`: 4 stars, the printed formula gives 2). The tests use the corrected form and cite the erratum.
+
+### Step 2: `KSet` (design note: `dev/design/kset.md`)
+
+- **Public API**: `flanpy.KSet`, an immutable set of integers `k >= 1` stored as canonical sorted, disjoint, non-adjacent integer intervals (last one possibly `[n0, ∞)`); printed as `[1, 53] ∪ {54} ∪ [55, ∞)`. Set operators as for `frozenset` (`~` is the complement in `k >= 1`), `tail_start` (least `n0` with `[n0, ∞)` inside, for limits `k -> ∞`), `is_finite`, `finite_part`; iteration only when finite.
+- **Construction**: `KSet(intervals)`, `KSet.of(*ks)`, `KSet.all()`, and `KSet.where(p, rel, *, k, den=None)` for `p(k) rel 0` with `p` in `Q[k]`. Exact: integer roots first, then VAS isolation (`sympy.Poly.intervals`) and refinement for the floors of the other roots, then exact signs at integers. SymPy only (python-flint 0.9 has no exact real-root isolation); memoised per polynomial.
+- **Denominators**: `den` is passed separately and never cancelled against `p`: its roots are always excluded (they record a division in the derivation). Rational `Expr`s are rejected. Cancel first for the lowest-terms reading.
+- **`KCases`** (piecewise results: disjoint `KSet` pieces -> values, with `uncovered` explicit and `KeyError` there): implemented and tested, private in `flanpy._kset` until step 3 returns one.
+- `System` and `series` do not use `KSet` (a generic well-posedness pass holds for every `k`).
 
 ## Planned layout
 
@@ -111,10 +119,10 @@ These are the ground truth; the package is not "done" for a feature until its te
 
 All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` layout). Version is static in `pyproject.toml`; `flanpy.__version__` reads it from the installed metadata.
 
-- **Extras**: `fast` (python-flint), `dev` (pytest, ruff, mypy, numpydoc, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, jupytext, sphinxcontrib-bibtex).
+- **Extras**: `fast` (python-flint), `dev` (pytest, hypothesis, ruff, mypy, numpydoc, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, jupytext, sphinxcontrib-bibtex).
 - **Types**: `mypy --strict` (chosen over pyright: Python-native, no Node dependency). Tests are type-checked but may omit annotations.
 - **Lint/format**: `ruff` with pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, RUF and pydocstyle (NumPy convention). `dev/spikes/` is excluded (throwaway code).
-- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors. Tests marked `slow` (N = 1000) are deselected by default (`-m "not slow"` in `addopts`); run them with `pytest -m slow`. Test helpers (e.g. `tests/_enumerate.py`, the brute-force enumerator for Broda 2020) are importable because `tests` is on pytest's `pythonpath`.
+- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors. Tests marked `slow` (N = 1000) are deselected by default (`-m "not slow"` in `addopts`); run them with `pytest -m slow`. Test helpers (e.g. `tests/_enumerate.py`, the brute-force enumerator for Broda 2020) are importable because `tests` is on pytest's `pythonpath`. Property-based tests use `hypothesis` with a derandomized profile (`tests/conftest.py`). Doctests of a private module import its names from that module, not from `flanpy`: when pytest (importlib mode) collects a module alone, it executes it a second time, and the re-exported classes then differ.
 - **SPDX**: every `.py` file starts with `# SPDX-License-Identifier: GPL-3.0-or-later`.
 - **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 with the `fast` extra (flint backend) and on `3.x` without it (pure-Python backend; each job checks which backend it got), a `Slow tests` job (`pytest -m slow`, both entries) on every push and PR, plus a docs job (`sphinx-build -W` for HTML, executing the MyST-NB examples, then the `doctest` builder). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
 - **Repo files**: `README.md`, `CITATION.cff`, `CONTRIBUTING.md`, `docs/refs.bib` (DOIs checked against Crossref; arXiv-only entries against the arXiv API).
@@ -162,6 +170,7 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - [x] PyPI: name reserved with `0.0.1.dev0` on 2026-10-29; https://pypi.org/project/flanpy/.
 - [x] PyPI token: project-scoped token for `flanpy` in `~/.pypirc` `[pypi]` (done by Guilherme, 2026-10-29).
 - [x] Build-order step 1 (`system` + `series`): done 2026-10-29 (PR #1).
+- [x] Build-order step 2 (`kset`): done 2026-10-30 (PR #4).
 - Confirm the Broda 2020 eq. (5) erratum with the authors (see Decisions, step 1).
 - PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
 - Remaining technical risk: roots of characteristic polynomials that are not expressible in radicals (see Decisions), and Case I curves with larger systems, where the Groebner step may be slow. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.

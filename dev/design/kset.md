@@ -1,6 +1,7 @@
 # Design note: `KSet`
 
-Status: draft for approval (build-order step 2, chunk 1). 2026-10-30.
+Status: approved 2026-10-30 (answers in Section 8); implemented in chunk 2
+(`src/flanpy/_kset.py`, `tests/test_kset.py`).
 
 `k`, the alphabet size, is the only parameter, with domain the integers `k >= 1`
 (`system.md` §5.7). Every condition the later steps produce is a sign or vanishing
@@ -157,13 +158,21 @@ It returns the maximal integer intervals covering `k >= 1` on which `sign(P(n)) 
    Vincent–Akritas–Strzeboński continued-fraction method in exact integer arithmetic.
    Refine each `[a, b]` with `Q'.refine_root` until it contains no integer. Then
    `floor(r) = floor(a)`. This terminates because `r` is not an integer.
-5. **Pieces.** Cut `{1, 2, ...}` into a singleton `{n}` at each integer root, and into
-   two sides between `m` and `m + 1` at each non-integer root of floor `m`. No real root
-   of `P` lies in the real span of a resulting interval. So by the intermediate value
-   theorem `P` has a constant, non-zero sign there. Evaluate `P` exactly at the left end
-   (Horner over `int`/`Fraction`). Merge neighbours with equal sign (roots of even
-   multiplicity, roots below 1). Check: the last piece has the sign of the leading
-   coefficient.
+5. **Pieces.** Cut `{1, 2, ...}` between `c` and `c + 1` for every cut position `c`:
+   `n − 1` and `n` for an integer root `n` (so `{n}` is its own piece), and `m` for a
+   non-integer root of floor `m`. The cuts form a set, so the pieces are the gaps
+   between consecutive distinct cuts and tile `[1, ∞)` by construction. No real root of
+   `P` lies in the real span of a resulting interval. So by the intermediate value
+   theorem `P` has a constant sign there (zero only on an integer root's piece). Evaluate
+   `P` exactly at the left end (Horner over `int`). Merge neighbours with equal sign
+   (roots of even multiplicity, roots below 1). Check: the last piece has the sign of the
+   leading coefficient.
+
+   Implementation note: a first version processed the cuts as a sorted list of
+   `(position, is_integer_root)`, so `(4, False)` (the root `9/2`) came before `(4, True)`
+   (the root `4`), and the pieces overlapped. The hand-made test
+   `−(k − 4)(k − 9/2)` caught it; the cut-set form above cannot have this problem, and a
+   property test targets this configuration (Section 6).
 
 Why step 3 comes before step 4: the spike first tried "the root of `[a, b]` is the
 integer `n ∈ [a, b]` where `P(n) = 0`". That is wrong. For `(k − 20)(3k − 61)`, SymPy
@@ -173,17 +182,21 @@ brute-force check with `lambdify` gave wrong signs: it printed a constant term a
 `3896750/3`, which Python evaluates as a float. The tests use exact Horner evaluation
 (Section 6).
 
-**Cost** (spike, Apple M1, Python 3.13.16, SymPy 1.14.0 with flint ground types, single
-runs):
+**Cost** (spike, Apple M1, Python 3.13.16, SymPy 1.14.0, single runs). "flint" is
+SymPy with python-flint ground types (the default when python-flint is installed);
+"Python" is `SYMPY_GROUND_TYPES=python`, as in the CI job without the `fast` extra:
 
-| polynomial | degree | time | pieces |
-|---|---|---|---|
-| `disc_z p_k`, eq. (18) | 5 | < 1 ms | 3 |
-| `lc_z res_w(G, G_w)`, `G` of eq. (17) | 13 | < 1 ms | 1 |
-| `disc_z` of the squarefree part of `res_w(G, G_w)` | 41 | 3 ms | 4 |
-| random, 30-bit coefficients | 50 / 100 / 200 | 6 / 24 / 205 ms | 1–2 |
-| roots `1/2, 3/2, ..., (2d − 1)/2` | 30 / 60 | 30 / 201 ms | 30 / 60 |
-| `(k^2 − 2) ∏_{i=1}^{40} (k − i)` | 42 | 7 ms | 2 |
+| polynomial | degree | flint | Python | pieces |
+|---|---|---|---|---|
+| `disc_z p_k`, eq. (18) | 5 | < 1 ms | < 1 ms | 3 |
+| `lc_z res_w(G, G_w)`, `G` of eq. (17) | 13 | < 1 ms | 1 ms | 1 |
+| `disc_z` of the squarefree part of `res_w(G, G_w)` | 41 | 3 ms | 3 ms | 4 |
+| random, 30-bit coefficients | 50 / 100 / 200 | 6 / 24 / 205 ms | 47 / 217 / 5731 ms | 1–2 |
+| roots `1/2, 3/2, ..., (2d − 1)/2` | 30 / 60 | 30 / 201 ms | 55 / 621 ms | 30 / 60 |
+| `(k^2 − 2) ∏_{i=1}^{40} (k − i)` | 42 | 7 ms | 88 ms | 2 |
+
+Without flint ground types, degree 200 is about 27× slower (5.7 s); degree 100 or less
+stays under 0.3 s.
 
 Conditions from steps 3–4 are of degree tens at most, so the cost is negligible next to
 the Gröbner and resultant computations that produce them. The number of exact
@@ -209,15 +222,15 @@ result where a leading coefficient `lc(k) != 0`, plus instantiated results at th
 exceptional `k`. `KCases[T]` (generic in the value type) holds one result per piece:
 
 ```python
-class KCases(Generic[T]):
+class KCases[T]:
     def __init__(self, pieces: Mapping[KSet, T] | Iterable[tuple[KSet, T]]) -> None: ...
     pieces: tuple[tuple[KSet, T], ...]   # sorted by least element
     covered: KSet                        # union of the pieces
     uncovered: KSet                      # ~covered: undecided / not computed
     def __getitem__(self, k: int) -> T: ...                  # KeyError if uncovered
-    def map(self, f: Callable[[T], U]) -> KCases[U]: ...
+    def map[U](self, f: Callable[[T], U]) -> KCases[U]: ...
     def restrict(self, s: KSet) -> KCases[T]: ...            # pieces ∩ s
-    def combine(self, other: KCases[U], f: Callable[[T, U], V]) -> KCases[V]: ...
+    def combine[U, V](self, other: KCases[U], f: Callable[[T, U], V]) -> KCases[V]: ...
 ```
 
 **Invariants:**
@@ -301,6 +314,9 @@ over both `pieces` does it).
   `den` rejected.
 - **`where` errors**: `1/k`, `sqrt(k)`, another symbol, a float coefficient, `sqrt(2)`
   as a coefficient, a bad `rel`, `k` missing.
+- **`where`, an integer root next to another root (`hypothesis`)**: `(k − n)^m`
+  times a root in `(n − 1, n)` or `(n, n + 1)` (the configuration of the two regressions
+  above), against brute force.
 - **`where` against brute force (`hypothesis`)**: polynomials built from random rational
   roots in `[−20, 120]` (denominators up to 7), times an optional irreducible quadratic,
   with a random sign. Compare with exact Horner signs at `k = 1..B`, `B` = largest root
@@ -320,8 +336,9 @@ over both `pieces` does it).
   `cases[n]` and the `KeyError` message; `map`, `restrict`, `combine` (cover is the
   intersection); equality, hashing, `str`.
 - **Docstrings**: `tests/test_docstrings.py` picks up `KSet` and its public members
-  automatically (EX01). Each gets an Examples section; no allowlist entries are
-  planned.
+  automatically (EX01), after extending it to classmethods and staticmethods (`where`,
+  `of` and `all` were skipped before). Each has an Examples section; no allowlist
+  entries.
 
 ## 7. Docs plan (chunk 2)
 
@@ -343,10 +360,14 @@ over both `pieces` does it).
   discriminant `D` above, whose sign changes between 35 and 36, as an example of a root
   between integers, marked as derived and not from the paper. Status cell: step 2 done.
 
-## 8. Open questions for approval
+## 8. Decisions (approved 2026-10-30)
 
-1. `KCases` private until step 3 (recommended), or public now?
-2. Add `hypothesis` to the `dev` extra (recommended)?
-3. `where` takes polynomials only, with `den` separate and never cancelled
-   (Section 3). Is the conservative reading right for your use?
-4. Names: `KSet.where`, `KSet.of`, `KSet.all`, `tail_start`, `finite_part`, `KCases`.
+1. `KCases` is implemented and tested now, and stays private (in `_kset`, not
+   re-exported) until step 3 returns one.
+2. `hypothesis` is in the `dev` extra, with a derandomized profile in
+   `tests/conftest.py` (`derandomize=True`, `deadline=None`); `.hypothesis/` is in
+   `.gitignore`.
+3. `where` takes polynomials only; `den` is separate and never cancelled; a rational
+   `Expr` is rejected. Approved as written in Section 3.
+4. Names approved: `KSet.where`, `KSet.of`, `KSet.all`, `tail_start`, `finite_part`,
+   `KCases`.
