@@ -7,10 +7,11 @@ elimination to a single algebraic curve ``G(z, w) = 0``, singularity analysis,
 Newton-Puiseux expansions, and transfer theorems for coefficient asymptotics,
 possibly for families indexed by the alphabet size ``k``.
 
-Pre-alpha: the input type :class:`System`, its power-series coefficients
-(:func:`series`, :func:`series_in_k`), sets of alphabet sizes :class:`KSet` and
-piecewise results :class:`KCases`, and elimination to a :class:`Curve`
-(:func:`eliminate`, :func:`eliminate_in_k`) are implemented so far.
+Pre-alpha: implemented so far are the input type :class:`System`, its power-series
+coefficients (:func:`series`, :func:`series_in_k`), sets of alphabet sizes
+:class:`KSet` and piecewise results :class:`KCases`, elimination to a :class:`Curve`
+(:func:`eliminate`, :func:`eliminate_in_k`), and exact real algebraic numbers
+(:class:`AlgebraicReal`, the first part of singularity analysis).
 
 Examples
 --------
@@ -22,6 +23,7 @@ True
 
 from importlib.metadata import version as _version
 
+from flanpy._algebraic import AlgebraicReal
 from flanpy._curve import Curve
 from flanpy._elimination import eliminate, eliminate_in_k
 from flanpy._kset import KCases, KSet
@@ -37,6 +39,7 @@ from flanpy._system import (
 __version__: str = _version("flanpy")
 
 __all__ = [
+    "AlgebraicReal",
     "Curve",
     "IllPosedSystemError",
     "KCases",

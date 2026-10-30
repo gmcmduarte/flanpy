@@ -99,8 +99,9 @@ select = [
     "RUF", # ruff-specific
     "D",   # pydocstyle
 ]
-# KSet prints in set notation: [1, 53] ∪ [55, ∞) (RUF001-RUF003).
-allowed-confusables = ["∪"]
+# KSet prints in set notation: [1, 53] ∪ [55, ∞) (RUF001-RUF003); the singularity
+# docstrings use the papers' notation ρ (radius) and σ (a candidate singularity).
+allowed-confusables = ["∪", "ρ", "σ"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
@@ -125,7 +126,7 @@ warn_unreachable = true
 
 # SymPy and numpydoc ship no type information (no py.typed marker).
 [[tool.mypy.overrides]]
-module = ["sympy", "sympy.*", "numpydoc", "numpydoc.*"]
+module = ["sympy", "sympy.*", "numpydoc", "numpydoc.*", "mpmath", "mpmath.*"]
 ignore_missing_imports = true
 
 # python-flint is optional (the `fast` extra); it ships py.typed when installed.

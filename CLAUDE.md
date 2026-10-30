@@ -87,7 +87,11 @@ src/flanpy/
                  (SymPy only), exceptional k (design: dev/design/elimination.md)
   _doctests.py   method_doctests: methods of public classes for a module's __test__
   symbolic/      grammar -> equations, bivariate cost series (d/du at u=1)
-  singularity/   m_rho, m_a, Case I/II, dominant-singularity checks
+  _algebraic.py  AlgebraicReal (exact real algebraic numbers: minimal polynomial + index,
+                 cached isolating interval), root isolation, the circle test; re-exported
+                 from flanpy (design: dev/design/singularity.md)
+  _singularity.py  (step 4, chunks 3-4) Singularity, singularity / singularity_in_k,
+                 KRoot: m_rho, m_a, Case I/II, dominant-singularity checks
   newton/        Newton polygon, Newton-Puiseux
   transfer/      Thm 3.1 / 3.2, square-root case
   families/      expansions in 1/k
