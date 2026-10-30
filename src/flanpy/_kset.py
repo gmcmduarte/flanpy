@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Sets of alphabet sizes ``k >= 1``, and results that depend on ``k`` piecewise.
 
-The design is recorded in ``dev/design/kset.md``. :class:`KSet` is public;
-:class:`KCases` stays private until a public function returns one (step 3).
+The design is recorded in ``dev/design/kset.md``. Both classes are public;
+:class:`KCases` became public with step 3, which returns one
+(``dev/design/elimination.md``, section 6).
 """
 
 from __future__ import annotations
@@ -17,7 +18,9 @@ from typing import Any, Literal, NoReturn, SupportsIndex
 
 import sympy as sp
 
-__all__ = ["KSet"]
+from flanpy._doctests import method_doctests
+
+__all__ = ["KCases", "KSet"]
 
 Relation = Literal["==", "!=", "<", "<=", ">", ">="]
 
@@ -643,8 +646,8 @@ def _sign_pieces(coeffs: tuple[Fraction, ...]) -> tuple[_Piece, ...]:
 class KCases[T]:
     """A result that takes one value on each of several disjoint :class:`KSet` s.
 
-    Private until step 3 returns one (kset.md, section 4). The pieces are pairwise
-    disjoint; their union is :attr:`covered`, where the result is known.
+    The pieces are pairwise disjoint; their union is :attr:`covered`, where the
+    result is known.
     Everything else, :attr:`uncovered`, is undecided or not computed, and is part
     of the value: it is printed and compared, and looking up a ``k`` there raises
     ``KeyError``. Empty pieces are dropped (they hold no ``k``).
@@ -661,14 +664,27 @@ class KCases[T]:
     ValueError
         If two pieces overlap.
 
+    Notes
+    -----
+    Equal values on different pieces are not merged (structural equality of SymPy
+    values is unreliable); a function that returns a ``KCases`` merges where it can
+    prove equality, as :func:`~flanpy.eliminate_in_k` does. Looking up ``k`` with
+    ``cases[k]`` returns the value of the piece that contains it.
+
     Examples
     --------
     >>> from flanpy._kset import KCases, KSet
     >>> cases = KCases({KSet([(1, 53)]): "Case I", KSet.of(54): "Case II"})
     >>> cases[10], cases[54]
     ('Case I', 'Case II')
-    >>> print(cases.uncovered)
-    [55, ∞)
+    >>> print(cases)
+    [1, 53]: Case I
+    {54}: Case II
+    undecided: [55, ∞)
+    >>> cases[55]
+    Traceback (most recent call last):
+        ...
+    KeyError: 'k = 55 is not covered (undecided)'
     """
 
     __slots__ = ("_covered", "_pieces")
@@ -695,18 +711,61 @@ class KCases[T]:
 
     @property
     def pieces(self) -> tuple[tuple[KSet, T], ...]:
-        """The non-empty pieces and their values, sorted by least element."""
+        """The non-empty pieces and their values, sorted by least element.
+
+        Examples
+        --------
+        >>> from flanpy._kset import KCases, KSet
+        >>> KCases({KSet.of(54): "b", KSet([(1, 53)]): "a"}).pieces
+        ((KSet([(1, 53)]), 'a'), (KSet([(54, 54)]), 'b'))
+        """
         return self._pieces
 
     @property
     def covered(self) -> KSet:
-        """Where the result is known: the union of the pieces."""
+        """Where the result is known: the union of the pieces.
+
+        Examples
+        --------
+        >>> from flanpy._kset import KCases, KSet
+        >>> print(KCases({KSet.of(54): "b", KSet([(1, 53)]): "a"}).covered)
+        [1, 54]
+        """
         return self._covered
 
     @property
     def uncovered(self) -> KSet:
-        """Where the result is undecided or not computed: ``~covered``."""
+        """Where the result is undecided or not computed: ``~covered``.
+
+        Examples
+        --------
+        >>> from flanpy._kset import KCases, KSet
+        >>> print(KCases({KSet.of(54): "b", KSet([(1, 53)]): "a"}).uncovered)
+        [55, ∞)
+        """
         return ~self._covered
+
+    @property
+    def tail(self) -> tuple[KSet, T] | None:
+        """The piece that contains all large ``k``, or ``None`` if there is none.
+
+        At most one piece is infinite, because the pieces are disjoint. This is the
+        generic piece of a result with finitely many exceptional ``k``, and the one
+        on which limits as ``k -> ∞`` are taken (compare :attr:`KSet.tail_start`).
+
+        Examples
+        --------
+        >>> from flanpy._kset import KCases, KSet
+        >>> cases = KCases({KSet.of(1): "special", KSet([(2, None)]): "generic"})
+        >>> cases.tail
+        (KSet([(2, None)]), 'generic')
+        >>> KCases({KSet.of(1): "special"}).tail is None
+        True
+        """
+        for s, value in self._pieces:
+            if not s.is_finite:
+                return (s, value)
+        return None
 
     def __getitem__(self, k: int) -> T:
         n = _integer(k, "k")
@@ -718,17 +777,44 @@ class KCases[T]:
         raise KeyError(f"k = {n} is not covered (undecided)")
 
     def map[U](self, f: Callable[[T], U]) -> KCases[U]:
-        """Apply ``f`` to every value; the pieces are unchanged."""
+        """Apply ``f`` to every value; the pieces are unchanged.
+
+        Examples
+        --------
+        >>> from flanpy._kset import KCases, KSet
+        >>> print(KCases({KSet.of(1): 2, KSet([(2, None)]): 3}).map(lambda v: v * 10))
+        {1}: 20
+        [2, ∞): 30
+        """
         return KCases((s, f(value)) for s, value in self._pieces)
 
     def restrict(self, s: KSet) -> KCases[T]:
-        """Intersect every piece with ``s``; ``uncovered`` grows by ``~s``."""
+        """Intersect every piece with ``s``; ``uncovered`` grows by ``~s``.
+
+        Examples
+        --------
+        >>> from flanpy._kset import KCases, KSet
+        >>> cases = KCases({KSet.of(1): "a", KSet([(2, None)]): "b"})
+        >>> print(cases.restrict(KSet([(2, 10)])))
+        [2, 10]: b
+        undecided: {1} ∪ [11, ∞)
+        """
         return KCases((piece & s, value) for piece, value in self._pieces)
 
     def combine[U, V](self, other: KCases[U], f: Callable[[T, U], V]) -> KCases[V]:
         """Pairwise intersections of the pieces, with value ``f(a, b)``.
 
         The result covers ``self.covered & other.covered``.
+
+        Examples
+        --------
+        >>> from flanpy._kset import KCases, KSet
+        >>> a = KCases({KSet([(1, 9)]): 1, KSet([(10, None)]): 2})
+        >>> b = KCases({KSet([(1, 4)]): 10, KSet([(5, None)]): 20})
+        >>> print(a.combine(b, lambda u, v: u + v))
+        [1, 4]: 11
+        [5, 9]: 21
+        [10, ∞): 22
         """
         return KCases(
             (s & t, f(a, b)) for s, a in self._pieces for t, b in other._pieces
@@ -759,3 +845,10 @@ class KCases[T]:
 
     def __delattr__(self, name: str) -> NoReturn:
         raise AttributeError("KCases is immutable")
+
+
+KCases.__module__ = "flanpy"
+
+
+# Methods of the public classes, which __init__.py's doctests miss (_doctests.py).
+__test__ = method_doctests(KSet, KCases)

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Tests for flanpy.KSet and the private KCases (design: dev/design/kset.md, §6)."""
+"""Tests for flanpy.KSet and flanpy.KCases (design: dev/design/kset.md, §6)."""
 
 import itertools
 import pickle
@@ -153,7 +153,9 @@ def test_public_name() -> None:
     assert flanpy.KSet is KSet
     assert "KSet" in flanpy.__all__
     assert KSet.__module__ == "flanpy"
-    assert not hasattr(flanpy, "KCases")
+    assert flanpy.KCases is KCases
+    assert "KCases" in flanpy.__all__
+    assert KCases.__module__ == "flanpy"
 
 
 # -- operations -----------------------------------------------------------------
@@ -593,6 +595,17 @@ def test_kcases_uncovered_and_errors() -> None:
         KCases({KSet([(1, 5)]): "a", KSet([(3, 9)]): "b"})
     with pytest.raises(TypeError, match="keyed by KSet"):
         KCases({(1, 2): "a"})  # type: ignore[arg-type]
+
+
+def test_kcases_tail() -> None:
+    cases = KCases({KSet.of(1): "a", KSet([(2, INF)]): "b"})
+    assert cases.tail == (KSet([(2, INF)]), "b")
+    assert KCases({KSet([(1, 3), (7, INF)]): "b", KSet.of(5): "a"}).tail == (
+        KSet([(1, 3), (7, INF)]),
+        "b",
+    )
+    assert KCases({KSet([(1, 9)]): "a"}).tail is None
+    assert KCases({}).tail is None
 
 
 def test_kcases_map_restrict_combine() -> None:

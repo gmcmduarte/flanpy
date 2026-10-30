@@ -18,6 +18,8 @@ from typing import Any, NoReturn
 
 import sympy as sp
 
+from flanpy._doctests import method_doctests
+
 __all__ = [
     "IllPosedSystemError",
     "System",
@@ -854,3 +856,7 @@ def _support_cycle(jac: Any) -> list[int]:
         if state[start] == 0 and (found := dfs(start)) is not None:
             return found
     raise AssertionError("a non-nilpotent matrix has a cycle in its support graph")
+
+
+# Methods of the public classes, which __init__.py's doctests miss (_doctests.py).
+__test__ = method_doctests(System)
