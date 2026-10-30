@@ -21,7 +21,7 @@ True
 
 from importlib.metadata import version as _version
 
-from flanpy._kset import KSet
+from flanpy._kset import KCases, KSet
 from flanpy._series import series, series_in_k
 from flanpy._system import (
     IllPosedSystemError,
@@ -35,6 +35,7 @@ __version__: str = _version("flanpy")
 
 __all__ = [
     "IllPosedSystemError",
+    "KCases",
     "KSet",
     "System",
     "UndecidedSystemError",

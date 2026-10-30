@@ -82,6 +82,9 @@ $ pip install flanpy
 
 .. autoclass:: flanpy.KSet
    :members: where, of, all, intervals, tail_start, is_finite, finite_part, isdisjoint
+
+.. autoclass:: flanpy.KCases
+   :members: pieces, covered, uncovered, tail, map, restrict, combine
 ```
 
 Well-posedness of a {class}`~flanpy.System` follows
