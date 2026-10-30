@@ -9,9 +9,9 @@ kernelspec:
 
 Singularity analysis finds the dominant singularity $\rho$ of the series on a curve
 and the value $a = w(\rho)$. Both are real algebraic numbers, and flanpy keeps them
-exact. This page covers those numbers. The dominant singularity itself (Pringsheim's
-theorem, Case I and Case II {cite:p}`broda-2020-sigact`) follows in the next part of
-build-order step 4.
+exact. This page first covers those numbers, then the dominant singularity itself
+(Pringsheim's theorem, Case I and Case II {cite:p}`broda-2020-sigact`), at a fixed $k$
+and for symbolic $k$.
 
 ## Exact algebraic reals
 
@@ -120,4 +120,120 @@ inside `mpmath.workdps(50)`.
 
 ```{code-cell} python
 print(rho.as_expr(), quarter.as_expr())
+```
+
+## The dominant singularity
+
+{func}`flanpy.singularity` analyses the series $w(z)$ of the curve's system. Its
+coefficients are non-negative, so its radius of convergence $\rho$ is a singularity
+(Pringsheim's theorem), and a root of $\operatorname{lc}_w G \cdot \operatorname{disc}_w
+G$. Catalan's $F = 1 + zF^2$ is in **Case I**: $F$ stays finite at $\rho = 1/4$, with
+$a = F(1/4) = 2$:
+
+```{code-cell} python
+from flanpy import System, eliminate, singularity
+
+F = symbols("F")
+catalan = singularity(eliminate(System({F: 1 + z * F**2}, z=z), F))
+print(catalan)
+print(catalan.rho == Fraction(1, 4), catalan.a == 2)
+```
+
+A root of $\operatorname{lc}_w G \cdot \operatorname{disc}_w G$ need not be a
+singularity of the series. For the letters $L_k$ of {cite:t}`broda-2020-sigact` at
+$k = 2$, the factor $q_2$ has a positive root below $\rho_2$ where the series is
+analytic. flanpy locates $\rho$ among the candidates by exact comparisons, so it skips
+that root. $L_k$ is in **Case II**: $L_k(x) \to \infty$ as $x \to \rho^-$, and
+$\rho_2$ is a root of $p_2$, the leading coefficient of eq. (17):
+
+```{code-cell} python
+from sympy import Poly, discriminant
+
+k = symbols("k")
+B, Bb, M, Mb, L = symbols("B Bb M Mb L")
+ssnf = System(
+    {
+        B: 2 * z * B**2 + 2 * z * B * Bb + 2 * z * Bb,
+        Bb: k * z + 2 * z * B * Bb + 2 * z * Bb**2,
+        M: 4 * z * B * M + 2 * z * M * Bb + 2 * z * B * Mb + 2 * z * Mb,
+        Mb: k * z + 2 * z * M * Bb + 2 * z * B * Mb + 4 * z * Bb * Mb,
+        L: M + Mb,
+    },
+    z=z,
+    k=k,
+)
+curve = eliminate(ssnf, L, k=2)
+l2 = singularity(curve)
+print(l2)
+g = curve.as_expr()
+print(factor(Poly(g, L).LC() * discriminant(g, L)))
+q2_root = AlgebraicReal(188 * z**3 + 96 * z**2 + 15 * z - 1, 0)
+print(q2_root, q2_root < l2.rho)
+```
+
+## Uniqueness
+
+Transfer theorems need $\rho$ to be the only singularity on the circle
+$|z| = \rho$. {attr}`~flanpy.Singularity.unique` is `True` when that is proved, `False`
+when it is disproved, and `None`, with a {class}`~flanpy.SingularityWarning`, when it
+is undecided. Binary trees $T = z + zT^2$ have only odd sizes (period 2), so $-\rho$ is
+a singularity too:
+
+```{code-cell} python
+T = symbols("T")
+binary = singularity(eliminate(System({T: z + z * T**2}, z=z), T))
+print(binary.period, binary.unique)
+```
+
+Systems with a negative coefficient are refused: Pringsheim's theorem needs
+non-negative coefficients.
+
+```{code-cell} python
+from flanpy import UndecidedSingularityError
+
+try:
+    singularity(eliminate(System({F: 1 - z * F**2}, z=z), F))
+except UndecidedSingularityError as error:
+    print(error)
+```
+
+## Symbolic $k$
+
+{func}`flanpy.singularity_in_k` takes the result of
+{func}`~flanpy.eliminate_in_k` and describes $\rho_k$ for every $k \ge 1$, piece by
+piece, as a {class}`flanpy.KRoot`: the $j$-th positive root of a polynomial
+$f(z, k)$. The case, the period and uniqueness are constant on each piece. For $R_k$ of
+{cite:t}`broda-2020-sigact`, $\rho_k$ is the positive root of
+$\Delta_k = 1 - 2z - (7 + 8k) z^2$ for every $k$:
+
+```{code-cell} python
+from flanpy import KRoot, eliminate_in_k, singularity_in_k
+
+R = symbols("R")
+rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
+r_cases = singularity_in_k(eliminate_in_k(rk, R))
+print(r_cases)
+print(r_cases[1].rho == KRoot(1 - 2 * z - (7 + 8 * k) * z**2, 0, k=k))
+```
+
+The pieces come from the real roots of finitely many polynomials in $k$, where the
+description might change. Each interval between them is decided by one exact analysis
+at an integer, and each integer root separately. Equal descriptions are merged. For
+$L_k$, $\rho_k$ is the positive root of $p_k$, eq. (18), in Case II, for every $k$.
+At $k = 108$, $p_{108} = 4(27z + 1)(972z^2 - 1)$, so $-\rho_{108}$ is also a root, and
+uniqueness is left undecided there (the warning is shown below):
+
+```{code-cell} python
+l_cases = singularity_in_k(eliminate_in_k(ssnf, L))
+for piece, s in l_cases.pieces:
+    print(piece, "|", s.rho, "| Case", s.case, "| unique:", s.unique)
+```
+
+{meth}`Singularity.specialize <flanpy.Singularity.specialize>` gives the result at one
+$k$, with the exact minimal polynomials there. At $k = 54$, $p_{54}$ factors and
+$\rho_{54} = 2/45$:
+
+```{code-cell} python
+at54 = l_cases[54].specialize(54)
+print(at54.rho, at54.rho.polynomial.as_expr())
 ```
