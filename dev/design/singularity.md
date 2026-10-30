@@ -1,7 +1,8 @@
 # Design note: `singularity`
 
-Status: approved 2026-10-30 with amendments (answers in Section 11). Chunk 2
-(`AlgebraicReal`, the circle test, `KCases.flat_map`) implemented on branch `singularity`.
+Status: approved 2026-10-30 with amendments (answers in Section 11). Implemented on
+branch `singularity`: chunks 2–4 (`AlgebraicReal`, `singularity`, `KRoot`,
+`singularity_in_k`). Finding of chunk 4: `k = 108` (Section 6.4).
 
 Build-order step 4. From a `Curve` `G(z, w, k) = 0` (step 3) and its branch, the series
 `w(z)` of `curve.system`, find the **dominant singularity** `ρ` of the branch (not of the
@@ -454,7 +455,17 @@ this note used both. Continuity of `ρ_k` plus distinctness of the candidates is
 
 Spike: `R_k`, `A_k`: no cuts, one piece (0.1 s). `F_k`: cuts 54, 76.29, 108, 146.13, one
 piece (0.8 s). `L_k`: 7 cuts and 10 samples, which all give "1st positive root of `p_k`,
-Case II", so **one piece `[1, ∞)`** (3.5 s).
+Case II", so **one piece `[1, ∞)`** (3.5 s). The spike's description left out `unique`;
+with it, `k = 108` is a separate piece for `L_k` and `F_k` (Section 6.4).
+
+Implementation (chunk 4): `P` is computed in two stages. `P1` (everything that does not
+depend on `f`) gives intervals on which `f` and `j` are constant; one sample per interval
+gives `f`, and `P2(f)` (`Ñ` and `E`) cuts it again. An exceptional `n` joins a
+description that holds exactly at `n`; otherwise its `KRoot`s are reused where they hold
+at `n`, or are the minimal polynomials at `n`. `unique` on an interval comes from the
+circle test in `k` (the identically-zero resultants mark "always on the circle"), the
+period and PS Thm 6.3, not from the sample. The full proof is in the Notes of
+`singularity_in_k`.
 
 ### 6.4 `E(k)` and `k = 54`
 
@@ -463,6 +474,16 @@ symbolic), times `Res_z(f_ρ, f_ρ(−z))`. It vanishes where some other candida
 `|z| = ρ_k`. It is coarse (it also catches real pairs with `σ_i σ_j = ρ_k^2`), which only
 adds samples. If `E ≡ 0` (for example `−ρ_k` is always a candidate, periodic families),
 the sample decides through the period.
+
+**`k = 108`** (found in chunk 4): `p_108 = 4(27z + 1)(972z^2 − 1)`, so
+`ρ_108 = 1/√972` and **`−ρ_108` is a candidate on the circle**. The closures of `L` and
+`F` are not irreducible (`L = M + M̄` over the linear `{M, M̄}` over `{B, B̄}`; `F = z + B
++ B̄`), so Section 5.3 gives `unique = None` at `k = 108`, with `SingularityWarning`, and
+`{108}` is a separate piece (same `ρ`, case and `a`). In truth `ρ_108` is unique:
+`[z^n] L_108 · ρ^n · √n` shows no `(−1)^n` term at `n = 600` (test, slow), and a
+Wielandt argument on the linear component would prove it (Section 5.4; later work, like
+`W = z^2 + T`). Broda §3.4 states uniqueness for `k > 54`; how its argument treats
+`k = 108` is to be checked against the paper.
 
 **`k = 54`** for `L_k`: `p_54 = 2(45z − 2)(18z + 1)^2`. The complex pair of `p_k`
 (`k <= 53`) collides at `−1/18`, which is also a root of `q_54`
@@ -495,11 +516,11 @@ class KRoot:  # "the positive_index-th positive root of polynomial(x, k)" (Secti
     def at(self, k: int) -> AlgebraicReal: ...  # exact; factors polynomial(x, k)
 
 
-class Singularity:
+class Singularity[X: (AlgebraicReal, KRoot)]:  # generic (chunk 4): typed fields
     curve: Curve
-    rho: AlgebraicReal | KRoot
+    rho: X  # AlgebraicReal from singularity, KRoot on a piece of singularity_in_k
     case: Literal["I", "II"]
-    a: AlgebraicReal | KRoot | None  # None in Case II
+    a: X | None  # None in Case II
     period: int
     unique: bool | None
     k: sympy.Symbol | None

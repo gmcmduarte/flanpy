@@ -2,9 +2,8 @@
 """The dominant singularity of the series on a curve (build-order step 4).
 
 The design is recorded in ``dev/design/singularity.md``. :class:`Singularity`,
-:func:`singularity`, :class:`UndecidedSingularityError` and
-:class:`SingularityWarning` are public. This chunk covers a fixed ``k`` and
-non-negative closures; the description in ``k`` (``singularity_in_k``) comes next.
+:func:`singularity`, :func:`singularity_in_k`, :class:`UndecidedSingularityError` and
+:class:`SingularityWarning` are public. Non-negative closures only.
 
 References: Flajolet and Sedgewick, *Analytic Combinatorics* (2009), "FS";
 Pivoteau and Salvy, *Effective Asymptotics of Combinatorial Systems*
@@ -26,22 +25,26 @@ import sympy as sp
 
 from flanpy._algebraic import (
     AlgebraicReal,
+    KRoot,
     _others_on_circle,
     _positive_roots,
+    _primitive_in_x,
     _real_roots,
     _separate,
     _separators,
+    _square,
 )
 from flanpy._curve import Curve
 from flanpy._doctests import method_doctests
 from flanpy._elimination import _closure
-from flanpy._kset import KSet
+from flanpy._kset import KCases, KSet, _breakpoints, _Interval, _key
 
 __all__ = [
     "Singularity",
     "SingularityWarning",
     "UndecidedSingularityError",
     "singularity",
+    "singularity_in_k",
 ]
 
 Case = Literal["I", "II"]
@@ -99,21 +102,27 @@ class SingularityWarning(UserWarning):
     """
 
 
-class Singularity:
-    """The dominant singularity of the series ``w(z)`` on a curve, at a fixed ``k``.
+class Singularity[X: (AlgebraicReal, KRoot)]:
+    """The dominant singularity of the series ``w(z)`` on a curve.
 
-    Returned by :func:`singularity`; not built directly. The fields follow
-    Broda et al. (2020), section 3.3:
+    Returned by :func:`singularity` (a fixed ``k``) and :func:`singularity_in_k`
+    (one per piece of ``k``); not built directly. The fields follow Broda et al.
+    (2020), section 3.3:
 
     - :attr:`rho`: the radius of convergence ``ρ`` of ``w``, its singularity on
-      ``(0, ∞)`` (Pringsheim), exact; ``rho.polynomial`` is ``m_ρ``;
+      ``(0, ∞)`` (Pringsheim), exact; ``rho.polynomial`` is ``m_ρ`` at a fixed
+      ``k``;
     - :attr:`case`: ``"I"`` if ``w(x) → a < ∞`` as ``x → ρ⁻``, ``"II"`` if
       ``w(x) → ∞``;
-    - :attr:`a`: ``a = w(ρ)`` in Case I, exact (``a.polynomial`` is ``m_a``);
-      ``None`` in Case II;
+    - :attr:`a`: ``a = w(ρ)`` in Case I, exact (``a.polynomial`` is ``m_a`` at a
+      fixed ``k``); ``None`` in Case II;
     - :attr:`period`: the largest ``p`` with ``w(z) = z^r V(z^p)`` (FS Def. IV.5);
     - :attr:`unique`: whether ``ρ`` is the only singularity on ``|z| = ρ``
       (``None`` when undecided, with a :class:`SingularityWarning`).
+
+    At a fixed ``k``, ``rho`` and ``a`` are :class:`~flanpy.AlgebraicReal`. On a
+    piece of :func:`singularity_in_k` they are :class:`~flanpy.KRoot`, valid at
+    every ``k`` of :attr:`kset`; :meth:`specialize` gives the fixed-``k`` result.
 
     Notes
     -----
@@ -136,9 +145,9 @@ class Singularity:
     __slots__ = ("_a", "_case", "_curve", "_k", "_kset", "_period", "_rho", "_unique")
 
     _curve: Curve
-    _rho: AlgebraicReal
+    _rho: X
     _case: Case
-    _a: AlgebraicReal | None
+    _a: X | None
     _period: int
     _unique: bool | None
     _k: Any
@@ -151,12 +160,13 @@ class Singularity:
     def _make(
         cls,
         curve: Curve,
-        rho: AlgebraicReal,
+        rho: X,
         case: Case,
-        a: AlgebraicReal | None,
+        a: X | None,
         period: int,
         unique: bool | None,
-    ) -> Singularity:
+        kset: KSet | None = None,
+    ) -> Singularity[X]:
         new = object.__new__(cls)
         _set = object.__setattr__
         _set(new, "_curve", curve)
@@ -166,14 +176,14 @@ class Singularity:
         _set(new, "_period", period)
         _set(new, "_unique", unique)
         _set(new, "_k", curve.k)
-        _set(new, "_kset", curve.kset)
+        _set(new, "_kset", curve.kset if kset is None else kset)
         return new
 
     # -- public interface ----------------------------------------------------------
 
     @property
     def curve(self) -> Curve:
-        """The curve at the fixed ``k``, whose branch is analysed.
+        """The curve whose branch is analysed (symbolic on a piece of ``k``).
 
         Examples
         --------
@@ -186,8 +196,10 @@ class Singularity:
         return self._curve
 
     @property
-    def rho(self) -> AlgebraicReal:
+    def rho(self) -> X:
         """The radius of convergence ``ρ``, exact; ``rho.polynomial`` is ``m_ρ``.
+
+        A :class:`~flanpy.KRoot` on a piece of :func:`singularity_in_k`.
 
         Examples
         --------
@@ -232,8 +244,10 @@ class Singularity:
         return self._case
 
     @property
-    def a(self) -> AlgebraicReal | None:
+    def a(self) -> X | None:
         """``w(ρ)`` in Case I, exact (``a.polynomial`` is ``m_a``); ``None`` in Case II.
+
+        A :class:`~flanpy.KRoot` on a piece of :func:`singularity_in_k`.
 
         Examples
         --------
@@ -288,7 +302,7 @@ class Singularity:
 
     @property
     def k(self) -> Any:
-        """The parameter: ``None`` at a fixed ``k``.
+        """The parameter: ``None`` at a fixed ``k``, else the curve's ``k``.
 
         Examples
         --------
@@ -302,7 +316,10 @@ class Singularity:
 
     @property
     def kset(self) -> KSet:
-        """The ``k`` this result is for: the curve's :attr:`~flanpy.Curve.kset`.
+        """The ``k`` this result is for.
+
+        At a fixed ``k``, the curve's :attr:`~flanpy.Curve.kset`; on a piece of
+        :func:`singularity_in_k`, the piece.
 
         Examples
         --------
@@ -314,6 +331,65 @@ class Singularity:
         KSet([(2, 2)])
         """
         return self._kset
+
+    def specialize(self, k: int) -> Singularity[AlgebraicReal]:
+        """Return the result at a fixed ``k``, with exact minimal polynomials.
+
+        ``rho`` and ``a`` become :class:`~flanpy.AlgebraicReal` (``KRoot.at``),
+        so ``rho.polynomial`` is ``m_ρ`` at ``k``; the curve becomes
+        ``curve.specialize(k)``. The case, the period and ``unique`` are those of
+        the piece. On a piece where ``unique`` is ``None``, ``singularity(curve,
+        k=k)`` may still decide one ``k`` (singularity.md, section 6.4).
+
+        Parameters
+        ----------
+        k : int
+            A value in :attr:`kset`.
+
+        Returns
+        -------
+        Singularity
+            The result at ``k``, as :func:`singularity` gives it.
+
+        Raises
+        ------
+        TypeError
+            If ``k`` is not an ``int``.
+        ValueError
+            If the result is already at a fixed ``k``, or ``k`` is not in
+            :attr:`kset`.
+
+        Examples
+        --------
+        Broda et al. (2020) ``R_k``: ``ρ_2`` is the positive root of
+        ``Δ_2 = 1 - 2z - 23z^2``.
+
+        >>> from sympy import symbols
+        >>> from flanpy import System, eliminate_in_k, singularity_in_k
+        >>> z, k, R = symbols("z k R")
+        >>> rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
+        >>> s = singularity_in_k(eliminate_in_k(rk, R))[2]
+        >>> s.rho
+        KRoot(8*k*z**2 + 7*z**2 + 2*z - 1, 0, k=k)
+        >>> s.specialize(2).rho
+        AlgebraicReal(23*z**2 + 2*z - 1, 1)
+        """
+        if self._k is None:
+            raise ValueError("the result is at a fixed k: nothing to specialize")
+        if isinstance(k, bool) or not isinstance(k, int):
+            raise TypeError(f"k must be an int, got {k!r} of type {type(k).__name__}")
+        if k not in self._kset:
+            raise ValueError(f"k = {k} is not in the result's kset {self._kset}")
+        assert isinstance(self._rho, KRoot)
+        a = self._a.at(k) if isinstance(self._a, KRoot) else None
+        return Singularity._make(
+            self._curve.specialize(k),
+            self._rho.at(k),
+            self._case,
+            a,
+            self._period,
+            self._unique,
+        )
 
     # -- value semantics -----------------------------------------------------------
 
@@ -354,7 +430,15 @@ class Singularity:
     def __reduce__(self) -> tuple[Any, ...]:
         return (
             _restore,
-            (self._curve, self._rho, self._case, self._a, self._period, self._unique),
+            (
+                self._curve,
+                self._rho,
+                self._case,
+                self._a,
+                self._period,
+                self._unique,
+                self._kset,
+            ),
         )
 
     def __setattr__(self, name: str, value: object) -> NoReturn:
@@ -364,16 +448,17 @@ class Singularity:
         raise AttributeError("Singularity is immutable")
 
 
-def _restore(
+def _restore[X: (AlgebraicReal, KRoot)](
     curve: Curve,
-    rho: AlgebraicReal,
+    rho: X,
     case: Case,
-    a: AlgebraicReal | None,
+    a: X | None,
     period: int,
     unique: bool | None,
-) -> Singularity:
+    kset: KSet,
+) -> Singularity[X]:
     """Rebuild a pickled :class:`Singularity`."""
-    return Singularity._make(curve, rho, case, a, period, unique)
+    return Singularity._make(curve, rho, case, a, period, unique, kset)
 
 
 Singularity.__module__ = "flanpy"
@@ -384,7 +469,7 @@ SingularityWarning.__module__ = "flanpy"
 # -- the public function -----------------------------------------------------------
 
 
-def singularity(curve: Curve, *, k: int | None = None) -> Singularity:
+def singularity(curve: Curve, *, k: int | None = None) -> Singularity[AlgebraicReal]:
     """Return the dominant singularity of the series on ``curve``, at a fixed ``k``.
 
     The branch is the series ``w(z)`` of ``curve.system``. Its closure (the unknowns
@@ -498,7 +583,8 @@ def singularity(curve: Curve, *, k: int | None = None) -> Singularity:
     if curve.k is not None:
         if k is None:
             raise ValueError(
-                "the curve has the parameter k: give k=n to analyse it at k = n"
+                "the curve has the parameter k: give k=n to analyse it at k = n, "
+                "or use flanpy.singularity_in_k for every k"
             )
         curve = curve.specialize(k)
     elif k is not None:
@@ -506,10 +592,575 @@ def singularity(curve: Curve, *, k: int | None = None) -> Singularity:
     return _analyse(curve)
 
 
+def singularity_in_k(curves: Curve | KCases[Curve]) -> KCases[Singularity[Any]]:
+    """Return the dominant singularity for symbolic ``k``, piece by piece.
+
+    On each piece, ``ρ_k`` is described as the ``j``-th positive root of an
+    irreducible factor ``f(z, k)`` of the candidates, and in Case I ``a_k`` as the
+    ``j'``-th positive root of an irreducible factor ``g(w, k)`` (both
+    :class:`~flanpy.KRoot`); the case, the period and ``unique`` are constant on the
+    piece. The pieces come from the real roots of a finite set of polynomials in
+    ``k`` (the projection set; see Notes), one exact fixed-``k`` analysis
+    (:func:`singularity`) per interval between them, and one at each integer root.
+    Pieces with the same description are merged.
+
+    Parameters
+    ----------
+    curves : Curve or KCases[Curve]
+        A curve with the parameter ``k``, or the result of
+        :func:`~flanpy.eliminate_in_k` (handled piece by piece with
+        :meth:`KCases.flat_map <flanpy.KCases.flat_map>`; a piece with a fixed-``k``
+        curve gets :func:`singularity` of that curve).
+
+    Returns
+    -------
+    KCases[Singularity]
+        Pieces covering the ``kset`` of every input curve; nothing is dropped.
+
+    Raises
+    ------
+    TypeError
+        If ``curves`` is not a :class:`~flanpy.Curve` or a ``KCases`` of them.
+    ValueError
+        If a curve has no parameter ``k`` (use :func:`singularity`), or the series
+        is a polynomial at some ``k`` (restrict the input to exclude it).
+    UndecidedSingularityError
+        If the closure has a coefficient that is negative for some ``k >= 1``
+        (tested with ``k = 1 + t``, as in :class:`~flanpy.System`).
+
+    Warns
+    -----
+    SingularityWarning
+        For the pieces where uniqueness on ``|z| = ρ_k`` is undecided.
+
+    See Also
+    --------
+    singularity : one fixed ``k``.
+    Singularity.specialize : the result of a piece at one ``k``.
+
+    Notes
+    -----
+    **Projection set** (singularity.md, section 6.2). Let ``R = lc_w G · disc_w G``
+    (``lc_w G`` if ``deg_w G = 1``), ``R̃`` the product of its distinct irreducible
+    factors in ``Q[z, k]`` of positive degree in ``z``, and ``R̃'`` the same without
+    the factor ``z``. ``P1`` holds ``lc_z R̃``, ``disc_z R̃``, ``R̃'(0, k)``, the
+    factors in ``k`` alone of ``lc_w G`` and ``disc_w G``, and the coefficients in
+    ``k`` of the closure of ``w`` (its support). For a factor ``f`` of ``R̃'``, let
+    ``Ñ`` be the product of the distinct irreducible factors of positive degree in
+    ``w`` of ``Res_z(f, G)``, and ``Ñ'`` the same without a factor ``w``. ``P2(f)``
+    holds the factors in ``k`` alone of ``Res_z(f, G)``, ``lc_w Ñ``, ``disc_w Ñ``,
+    ``Ñ'(0, k)``, and ``E(f)``: the resultants ``Res_z(f, f'(-z))`` and
+    ``Res_y(μ, Q_f')`` that are not identically zero, for the factors ``f'`` of
+    ``R̃'``, the irreducible factors ``μ`` of ``Res_z(f, y - z^2)`` and the
+    polynomials ``Q_f'`` of the circle test (section 5.1; with the denominator
+    left by the division).
+
+    **Algorithm.** The real roots ``>= 1`` of ``P1`` cut ``[1, ∞)`` into open
+    intervals. An interval holding an integer of the curve's ``kset`` is sampled
+    at one such integer, which gives ``f``; the real roots of ``P2(f)`` cut it
+    again, and every subinterval is sampled once. The integer roots are
+    instantiated: ``singularity(curve, k=n)``. An instantiated ``n`` joins a
+    description that holds exactly at ``n`` (``KRoot.at(n)`` equal to ``ρ_n``,
+    the rest equal), or keeps its own, with the minimal polynomials at ``n``. All
+    root computations are exact (as for :meth:`KSet.where <flanpy.KSet.where>`).
+
+    **Proposition.** On an open interval ``I ⊂ [1, ∞)`` where no polynomial of
+    ``P1`` vanishes, ``f`` and ``j`` are constant; where moreover no polynomial of
+    ``P2(f)`` vanishes, so are the case, ``g``, ``j'``, the period and ``unique``.
+
+    *Proof.* (1) For real ``k ∈ I`` the closure has non-negative coefficients
+    (polynomials in ``t = k - 1`` with non-negative coefficients) and a constant
+    support. It is well posed (a pass for symbolic ``k`` holds at every ``k``,
+    system.md §5.7), so ``w(z, k) = Σ w_n(k) z^n`` with ``w_n`` non-negative and
+    non-decreasing on ``[1, ∞)``; which ``w_n`` vanish depends only on the support
+    (no cancellation), so ``w(·, k)`` is not a polynomial (as at the sample) and
+    ``ρ_k < ∞``. ``G(z, w(z, k), k) = 0`` holds in ``Q[k][[z]]``, hence at ``k``;
+    the contents of ``lc_w G`` and ``disc_w G`` do not vanish, so ``G(·, ·, k)``
+    has full degree in ``w`` and is squarefree, and every singularity of
+    ``w(·, k)`` is a root of ``R̃(·, k)`` (FS Lemma VII.4). By Pringsheim (FS
+    Thm IV.6), ``ρ_k`` is one, positive.
+
+    (2) The roots of ``R̃(·, k)`` are simple (``disc_z``), constant in number
+    (``lc_z``) and never ``0`` except for the factor ``z`` (``R̃'(0, k)``). So the
+    positive ones are continuous functions ``σ_1 < ... < σ_s`` on ``I``; each is
+    a root of one factor and keeps its position among that factor's positive
+    roots.
+
+    (3) ``k ↦ ρ_k`` is continuous on ``I``. If ``q < ρ_{k0}``, then
+    ``u = Y(q, k0) + δ (I - J)^{-1} 1`` satisfies ``H(q, u, k0) < u`` strictly
+    for small ``δ > 0`` (Notes of :func:`singularity`); ``H`` is polynomial in
+    ``k``, so ``H(q, u, k) <= u`` near ``k0``, and the Kleene iterates stay below
+    ``u``: ``q <= ρ_k``. If ``q > ρ_{k0}``, the Kleene iterates
+    ``ℓ_N(k) = H^N(q, 0, k)`` are unbounded at ``k0`` (a bounded limit would be a
+    super-solution, so ``q <= ρ_{k0}``). In the first strongly connected
+    component ``C`` with an unbounded coordinate, ``Λ(J(q, ℓ_N(k0), k0)) -> ∞`` if
+    ``C`` is nonlinear; if ``C`` is linear, its block of ``J`` tends to
+    ``B(q, U)``, ``U`` the finite limits of the earlier coordinates, with
+    ``Λ(B(q, U)) >= 1``. Every cycle of ``B`` has an entry that vanishes at
+    ``z = 0`` (``J(0, Y(0))`` is nilpotent: well-posedness) and increases strictly
+    with ``q``, so ``Λ(B)`` increases strictly with ``q`` (Perron-Frobenius) and
+    equals 1 for at most one ``q`` per component (its radius ``ρ_C``, PS
+    Thm 6.4). So for all but finitely many ``q > ρ_{k0}`` some ``N`` has
+    ``Λ(J(q, ℓ_N(k0), k0)) > 1``; ``Λ`` is continuous, so the same holds near
+    ``k0``, where it forces ``q >= ρ_k``: if ``q < ρ_k``, then ``ℓ_N(k) <= Y(q, k)``
+    and ``Λ(J(q, ℓ_N(k), k)) <= Λ(J(q, Y(q, k), k)) < 1`` (PS Lemma 6.7, B.5,
+    3.6). Hence ``ρ`` is lower and upper semicontinuous.
+
+    (4) A continuous function on the connected ``I`` with values among the
+    distinct continuous ``σ_1(k), ..., σ_s(k)`` is one ``σ_i``: ``f`` and ``j`` are
+    constant.
+
+    (5) The case and ``a_k``. A finite limit ``w(ρ_k⁻, k)`` is a root of
+    ``G(ρ_k, ·, k)``, hence of ``Res_z(f, G)(·, k)``, hence of ``Ñ(·, k)`` (the
+    content in ``k`` does not vanish). Fix ``k0 ∈ I``, rationals
+    ``q_0 < τ_1 < q_1 < ... < τ_t < q_t`` around the real roots ``τ_i`` of
+    ``Ñ(·, k0)``, chosen with ``G(·, q_i, k0) ≢ 0``, and ``x0 < ρ_{k0}`` above
+    every root of these polynomials below ``ρ_{k0}``. They are not zero at
+    ``ρ_{k0}`` either (``q_i`` is no root of ``Res_z(f, G)(·, k0)``). (a) Near
+    ``k0`` the ``τ_i(k)`` stay simple and continuous, none appears or escapes
+    (``disc_w Ñ``, ``lc_w Ñ``), so the same ``q_i`` separate them. (b)
+    ``G(x, q_i, k0) != 0`` on the compact ``[x0, ρ_{k0}]``, so
+    ``G(x, q_i, k) != 0`` on ``[x0, ρ_k]`` for ``k`` near ``k0`` (item 3). (c)
+    ``w(x0, k)`` is continuous near ``k0``: ``w_n(k) <= w_n(k0 + ε)`` and
+    ``Σ w_n(k0 + ε) x0^n < ∞`` since ``x0 < ρ_{k0 + ε}`` (M-test). So for ``k``
+    near ``k0``, ``w(·, k)`` stays on ``[x0, ρ_k)`` in the window of ``w(x0, k0)``
+    and its limit at ``ρ_k`` is no ``q_i``: it is ``∞`` (top window, which holds no
+    root) or the root ``τ_i(k)`` of that window. The window is locally constant,
+    hence constant on ``I``: so is the case, and in Case I ``a_k = τ_i(k)``. This
+    root belongs to one factor ``g`` (roots of distinct factors never meet), is
+    positive, and keeps its position ``j'`` among the positive roots of ``g``
+    (``Ñ'(0, k) != 0``).
+
+    (6) The period depends only on the support of the closure (PS §7.1), so it is
+    constant. On ``I``, ``unique`` is decided by the table of section 5.3 with an
+    exact circle test in ``k``: let ``μ`` be the factor of ``Res_z(f, y - z^2)``
+    that vanishes at ``ρ_k^2`` (the same on ``I``: two factors share ``ρ_k^2`` only
+    where ``-ρ_k`` is a root of ``f``). If neither ``Res_z(f, f'(-z))`` nor
+    ``Res_y(μ, Q_f')`` vanishes identically for any ``f'``, no other candidate
+    lies on ``|z| = ρ_k`` for any ``k ∈ I``: such a candidate ``σ`` is a root of
+    some ``f'``, and ``σ = -ρ_k`` makes the first resultant vanish at ``k``, a
+    non-real ``σ`` makes ``σσ̄ = ρ_k^2`` a common root of ``μ(·, k)`` and
+    ``Q_f'(·, k)`` (leading coefficients do not vanish: ``lc_z f``). So
+    ``unique`` is ``True`` (FS Lemma VII.4). Otherwise the period (``False``) or
+    PS Thm 6.3 (``True``, structural) decides, or ``unique`` is ``None``. ∎
+
+    Merging needs no argument: each piece's description is proved on each of its
+    parts. Sources as for :func:`singularity`; Perron-Frobenius in the form of PS
+    Lemma B.5.
+
+    Examples
+    --------
+    Broda et al. (2020) ``R_k``: one piece, ``ρ_k`` the positive root of
+    ``Δ_k = 1 - 2z - (7 + 8k) z^2`` (section 3.1), and
+    ``a_k = R_k(ρ_k) = sqrt((k + 1)/2)``.
+
+    >>> from sympy import symbols
+    >>> from flanpy import System, eliminate_in_k, singularity_in_k
+    >>> z, k, R = symbols("z k R")
+    >>> rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
+    >>> cases = singularity_in_k(eliminate_in_k(rk, R))
+    >>> ((piece, s),) = cases.pieces
+    >>> print(piece)
+    [1, ∞)
+    >>> s.rho, s.case, s.a
+    (KRoot(8*k*z**2 + 7*z**2 + 2*z - 1, 0, k=k), 'I', KRoot(2*R**2 - k - 1, 0, k=k))
+    >>> s.specialize(2).rho
+    AlgebraicReal(23*z**2 + 2*z - 1, 1)
+    """
+    if isinstance(curves, KCases):
+        # The values carry their piece (an input piece may be smaller than its
+        # curve's kset).
+        return KCases(
+            (
+                part,
+                Singularity._make(
+                    s.curve, s.rho, s.case, s.a, s.period, s.unique, part
+                ),
+            )
+            for part, s in curves.flat_map(_in_k).pieces
+        )
+    if not isinstance(curves, Curve):
+        raise TypeError(
+            f"expected a flanpy.Curve or KCases of them, got {type(curves).__name__}"
+        )
+    return _in_k(curves)
+
+
+def _in_k(curve: object) -> KCases[Singularity[Any]]:
+    if not isinstance(curve, Curve):
+        raise TypeError(f"expected a flanpy.Curve, got {type(curve).__name__}")
+    if curve.k is None:
+        if curve.kset == KSet.all():
+            raise ValueError("the curve has no parameter k; use flanpy.singularity")
+        # A piece of eliminate_in_k with a curve at one fixed k.
+        try:
+            return KCases({curve.kset: singularity(curve)})
+        except UndecidedSingularityError:  # pragma: no cover - not at a fixed k >= 1
+            raise
+        except ValueError as error:
+            raise ValueError(
+                f"at k in {curve.kset}: {error}; restrict the input to exclude it"
+            ) from error
+    return _Family(curve).run()
+
+
+# -- symbolic k (singularity.md, section 6) -------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Description:
+    """What is constant on a piece (singularity.md, section 6.1)."""
+
+    rho: KRoot
+    case: Case
+    a: KRoot | None
+    period: int
+    unique: bool | None
+
+
+@dataclass(frozen=True)
+class _Second:
+    """``P2(f)`` and what the description on a subinterval needs."""
+
+    polys: tuple[Any, ...]  # in k
+    g_factors: tuple[sp.Poly, ...]  # of Ñ, gens (w, k)
+    mu_factors: tuple[sp.Poly, ...]  # of Res_z(f, y - z^2), gens (y, k)
+    always_pairs: frozenset[int]  # μ with Res_y(μ, Q_f') ≡ 0 for some f'
+    always_minus: bool  # Res_z(f, f'(-z)) ≡ 0 for some f'
+
+
+def _split(expr: Any, x: Any, k: Any) -> tuple[list[sp.Poly], list[Any]]:
+    """Distinct irreducible factors of positive degree in ``x``, and those in ``k``.
+
+    The first are normalised polynomials with gens ``(x, k)``; the second are
+    expressions in ``k``.
+    """
+    with_x: list[sp.Poly] = []
+    in_k: list[Any] = []
+    for factor, _ in sp.factor_list(sp.expand(expr), x, k)[1]:
+        poly = sp.Poly(factor, x, k, domain=sp.QQ)
+        if poly.degree(x) > 0:
+            normal = _primitive_in_x(poly)
+            if normal not in with_x:
+                with_x.append(normal)
+        elif poly.degree(k) > 0:
+            in_k.append(factor)
+    return with_x, in_k
+
+
+def _at(poly: sp.Poly, n: int) -> sp.Poly:
+    """``poly(x, n)`` for ``poly`` with gens ``(x, k)``, over ``QQ``."""
+    x, k = poly.gens
+    return sp.Poly(poly.as_expr().xreplace({k: sp.Integer(n)}), x, domain=sp.QQ)
+
+
+def _layout(polys: Sequence[Any], k: Any) -> tuple[set[int], list[_Interval]]:
+    """Integer roots ``>= 1`` of the polynomials, and the integer spans between.
+
+    A span ``(lo, hi)`` holds the integers of an open interval between consecutive
+    real roots (``hi = None``: up to ``∞``); exact (``KSet.where``'s breakpoints).
+    """
+    roots: set[int] = set()
+    events: list[tuple[int, int]] = []  # (n, 0): root n; (m, 1): a root in (m, m+1)
+    for p in polys:
+        poly = sp.Poly(p, k, domain=sp.QQ)
+        if poly.degree() < 1:
+            continue
+        integer_roots, floors = _breakpoints(_key(poly))
+        roots.update(integer_roots)
+        events.extend((m, 1) for m in floors)
+    events.extend((n, 0) for n in roots)
+    spans: list[_Interval] = []
+    start = 1
+    for position, kind in sorted(events):
+        hi = position - 1 if kind == 0 else position
+        if start <= hi:
+            spans.append((start, hi))
+        start = max(start, position + 1)
+    spans.append((start, None))
+    return roots, spans
+
+
+def _inside(span: _Interval, outer: _Interval) -> bool:
+    lo, hi = span
+    a, b = outer
+    return a <= lo and (b is None or (hi is not None and hi <= b))
+
+
+class _Family:
+    """The analysis of a curve with symbolic ``k`` (singularity.md, section 6)."""
+
+    def __init__(self, curve: Curve) -> None:
+        self.curve = curve
+        w, z, k = curve.w, curve.z, curve.k
+        self.w, self.z, self.k = w, z, k
+        self.g = curve.polynomial.as_expr()
+        found = _closure(curve.system, w)
+        if found is None:
+            raise ValueError(f"{w} is identically 0: it has no singularity")
+        unknowns, equations = found
+        lc = sp.Poly(self.g, w).LC()
+        candidates = (
+            lc * sp.discriminant(self.g, w) if sp.Poly(self.g, w).degree() > 1 else lc
+        )
+        self._check_signs(unknowns, equations, candidates)
+        factors, contents = _split(candidates, z, k)
+        self.factors = [f for f in factors if f.as_expr() != z]  # R̃'
+        whole = sp.Mul(*(f.as_expr() for f in factors))  # R̃
+        support = [
+            c
+            for u in unknowns
+            for c in sp.Poly(equations[u], z, *unknowns).coeffs()
+            if c.has(k)
+        ]
+        self.first: list[Any] = [
+            *contents,
+            sp.Poly(whole, z).LC(),
+            sp.discriminant(whole, z) if sp.Poly(whole, z).degree() > 1 else 1,
+            sp.Mul(*(f.as_expr() for f in self.factors)).subs(z, 0),
+            *support,
+        ]
+        self._samples: dict[int, tuple[Singularity[AlgebraicReal], _Closure]] = {}
+        self._second: dict[sp.Poly, _Second] = {}
+
+    def _check_signs(
+        self, unknowns: Sequence[Any], equations: dict[Any, Any], candidates: Any
+    ) -> None:
+        """Raise unless the closure is non-negative for ``k >= 1`` (``k = 1 + t``)."""
+        t = sp.Dummy("t")
+        for u in unknowns:
+            poly = sp.Poly(equations[u], self.z, *unknowns)
+            for monomial, c in poly.terms():
+                shifted = sp.Poly(sp.expand(c.subs(self.k, 1 + t)), t, domain=sp.QQ)
+                if any(x < 0 for x in shifted.coeffs()):
+                    term = sp.Mul(
+                        *(
+                            v**e
+                            for v, e in zip((self.z, *unknowns), monomial, strict=True)
+                        )
+                    )
+                    raise UndecidedSingularityError(
+                        f"cannot decide the dominant singularity of {self.w} for "
+                        f"symbolic k: in the equation of {u}, the coefficient "
+                        f"{sp.sstr(c)} of {sp.sstr(term)} has a negative coefficient "
+                        f"as a polynomial in t = {self.k} - 1. Non-negative "
+                        "coefficients in t are sufficient for a series with "
+                        "non-negative coefficients at every k >= 1, not necessary; "
+                        "signed systems are not supported yet. The candidates are "
+                        f"the roots of {sp.sstr(sp.factor(candidates))}."
+                    )
+
+    # -- samples -----------------------------------------------------------------
+
+    def sample(self, n: int) -> tuple[Singularity[AlgebraicReal], _Closure]:
+        """Return the exact analysis at ``k = n`` (warnings are the caller's)."""
+        if n not in self._samples:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", SingularityWarning)
+                try:
+                    self._samples[n] = _analysis(self.curve.specialize(n))
+                except UndecidedSingularityError:  # pragma: no cover - k = 1 + t
+                    raise
+                except ValueError as error:
+                    raise ValueError(
+                        f"at k = {n}: {error}; restrict the input to exclude it"
+                    ) from error
+        return self._samples[n]
+
+    def factor_of(self, rho: AlgebraicReal, n: int) -> sp.Poly:
+        """Return the factor ``f`` of ``R̃'`` with ``f(ρ_n, n) = 0``."""
+        for f in self.factors:
+            at_n = _at(f, n)
+            if not at_n.is_zero and rho.sign(at_n) == 0:
+                return f
+        raise RuntimeError(  # pragma: no cover - ρ_n is a candidate
+            f"ρ = {rho} is a root of no factor of the candidates at k = {n}"
+        )
+
+    # -- P2(f) -------------------------------------------------------------------
+
+    def second(self, f: sp.Poly) -> _Second:
+        if f not in self._second:
+            self._second[f] = self._compute_second(f)
+        return self._second[f]
+
+    def _compute_second(self, f: sp.Poly) -> _Second:
+        w, z, k = self.w, self.z, self.k
+        fe = f.as_expr()
+        polys: list[Any] = []
+        g_factors, contents = _split(sp.resultant(fe, self.g, z), w, k)
+        polys += contents
+        n_tilde = sp.Mul(*(g.as_expr() for g in g_factors))
+        polys.append(sp.Poly(n_tilde, w).LC())
+        if sp.Poly(n_tilde, w).degree() > 1:
+            polys.append(sp.discriminant(n_tilde, w))
+        polys.append(
+            sp.Mul(*(g.as_expr() for g in g_factors if g.as_expr() != w)).subs(w, 0)
+        )
+        # E(f): the circle test with k symbolic (section 6.4).
+        y = sp.Dummy("y")
+        mu_factors, contents = _split(sp.resultant(fe, y - z**2, z), y, k)
+        polys += contents
+        always_pairs: set[int] = set()
+        always_minus = False
+        for other in self.factors:
+            oe = other.as_expr()
+            minus = sp.expand(sp.resultant(fe, oe.subs(z, -z), z))
+            if minus == 0:
+                always_minus = True
+            else:
+                polys.append(minus)
+            d = other.degree(z)
+            if d < 2:
+                continue
+            products = sp.resultant(oe, sp.expand(z**d * oe.subs(z, y / z)), z)
+            squares = sp.resultant(oe, y - z**2, z)
+            numerator, denominator = sp.fraction(sp.cancel(products / squares))
+            if denominator.has(y):  # pragma: no cover - squares divides products
+                raise RuntimeError("the pair products are not a polynomial")
+            polys.append(denominator)
+            for i, mu in enumerate(mu_factors):
+                r = sp.expand(sp.resultant(mu.as_expr(), numerator, y))
+                if r == 0:
+                    always_pairs.add(i)
+                else:
+                    polys.append(r)
+        return _Second(
+            tuple(polys),
+            tuple(g_factors),
+            tuple(mu_factors),
+            frozenset(always_pairs),
+            always_minus,
+        )
+
+    # -- descriptions --------------------------------------------------------------
+
+    def describe(self, n: int, f: sp.Poly, second: _Second) -> _Description:
+        """Return the description at a sample ``n`` of a subinterval (section 6.1)."""
+        s, closure = self.sample(n)
+        rho = KRoot._make(f, _positive_roots(_at(f, n)).index(s.rho))
+        a = None
+        if s.a is not None:
+            g = next(
+                g
+                for g in second.g_factors
+                if not _at(g, n).is_zero and s.a.sign(_at(g, n)) == 0
+            )
+            a = KRoot._make(g, _positive_roots(_at(g, n)).index(s.a))
+        square = _square(s.rho)
+        mu = next(
+            i
+            for i, m in enumerate(second.mu_factors)
+            if not _at(m, n).is_zero and square.sign(_at(m, n)) == 0
+        )
+        proved_none = mu not in second.always_pairs and not second.always_minus
+        unique = _rule(s.period, proved_none, closure)
+        return _Description(rho, s.case, a, s.period, unique)
+
+    def exceptional(self, n: int, known: Sequence[_Description]) -> _Description:
+        """Return the description at an integer root ``n``.
+
+        A known description if it holds exactly at ``n``. Otherwise ``ρ`` and ``a``
+        are a known ``KRoot`` that holds exactly at ``n``, or the minimal
+        polynomial at ``n`` (constant in ``k``).
+        """
+        s, _ = self.sample(n)
+        for d in known:
+            if (d.case, d.period, d.unique) != (s.case, s.period, s.unique):
+                continue
+            if not _holds(d.rho, n, s.rho):
+                continue
+            if (d.a is None) != (s.a is None):
+                continue
+            if d.a is not None and s.a is not None and not _holds(d.a, n, s.a):
+                continue
+            return d
+        rho = next(
+            (d.rho for d in known if _holds(d.rho, n, s.rho)),
+            _constant_root(s.rho, self.k),
+        )
+        a = None
+        if s.a is not None:
+            a = next(
+                (d.a for d in known if d.a is not None and _holds(d.a, n, s.a)),
+                _constant_root(s.a, self.k),
+            )
+        return _Description(rho, s.case, a, s.period, s.unique)
+
+    # -- the pieces ------------------------------------------------------------------
+
+    def run(self) -> KCases[Singularity[KRoot]]:
+        kset = self.curve.kset
+        intervals: list[tuple[KSet, _Description]] = []
+        points1, spans1 = _layout(self.first, self.k)
+        points = {n for n in points1 if n in kset}
+        for span in spans1:
+            inside = KSet([span]) & kset
+            if not inside:
+                continue
+            n0 = inside.intervals[0][0]
+            rho0 = self.sample(n0)[0].rho
+            f = self.factor_of(rho0, n0)
+            second = self.second(f)
+            points2, spans2 = _layout([*self.first, *second.polys], self.k)
+            for sub in spans2:
+                part = KSet([sub]) & kset
+                if part and _inside(sub, span):
+                    n = n0 if n0 in part else part.intervals[0][0]
+                    intervals.append((part, self.describe(n, f, second)))
+            points |= {n for n in points2 if n in inside}
+        known = list(dict.fromkeys(d for _, d in intervals))
+        pieces = intervals + [
+            (KSet.of(n), self.exceptional(n, known)) for n in sorted(points)
+        ]
+        merged: dict[_Description, KSet] = {}
+        for part, d in pieces:
+            merged[d] = merged.get(d, KSet()) | part
+        undecided = [part for d, part in merged.items() if d.unique is None]
+        if undecided:
+            where = " ∪ ".join(str(part) for part in undecided)
+            warnings.warn(
+                SingularityWarning(
+                    f"uniqueness of the dominant singularity of {self.w} is "
+                    f"undecided for k in {where}"
+                ),
+                stacklevel=4,
+            )
+        return KCases(
+            (
+                part,
+                Singularity._make(
+                    self.curve, d.rho, d.case, d.a, d.period, d.unique, part
+                ),
+            )
+            for d, part in merged.items()
+        )
+
+
+def _holds(root: KRoot, n: int, x: AlgebraicReal) -> bool:
+    """Tell whether ``root.at(n)`` exists and equals ``x`` (exact)."""
+    try:
+        return root.at(n) == x
+    except ValueError:
+        return False
+
+
+def _constant_root(x: AlgebraicReal, k: Any) -> KRoot:
+    """``x`` as a :class:`KRoot` of its minimal polynomial (constant in ``k``)."""
+    m = x.polynomial
+    poly = sp.Poly(m.as_expr(), m.gen, k, domain=sp.ZZ)
+    return KRoot._make(poly, _positive_roots(m).index(x))
+
+
 # -- the analysis at a fixed k -----------------------------------------------------
 
 
-def _analyse(curve: Curve) -> Singularity:
+def _analyse(curve: Curve) -> Singularity[AlgebraicReal]:
+    return _analysis(curve)[0]
+
+
+def _analysis(curve: Curve) -> tuple[Singularity[AlgebraicReal], _Closure]:
+    """Return the analysis at a fixed ``k``, and the closure it used."""
     w, z = curve.w, curve.z
     g = sp.Poly(curve.polynomial.as_expr(), w, z, domain=sp.QQ)
     candidates = _candidates(g)
@@ -530,7 +1181,7 @@ def _analyse(curve: Curve) -> Singularity:
     case, a = _window_test(g, closure, rho, previous)
     period = _period(closure, closure.unknowns.index(w))
     unique = _unique(candidates, rho, period, closure, w)
-    return Singularity._make(curve, rho, case, a, period, unique)
+    return Singularity._make(curve, rho, case, a, period, unique), closure
 
 
 def _candidates(g: sp.Poly) -> sp.Poly:
@@ -962,16 +1613,26 @@ def _irreducible(closure: _Closure) -> bool:
     return True
 
 
+def _rule(period: int, proved_none: bool, closure: _Closure) -> bool | None:
+    """Decide ``unique`` by the table of singularity.md, section 5.3."""
+    if period > 1:
+        return False  # every ρ e^{2iπj/p} is a singularity (Pringsheim for V)
+    if proved_none:
+        return True  # every singularity is a candidate (FS Lemma VII.4)
+    if _irreducible(closure) and closure.nonlinear():
+        return True  # PS 2025 Thm 6.3, period 1
+    return None
+
+
 def _unique(
     candidates: sp.Poly, rho: AlgebraicReal, period: int, closure: _Closure, w: Any
 ) -> bool | None:
     if period > 1:
-        return False  # every ρ e^{2iπj/p} is a singularity (Pringsheim for V)
+        return False
     circle = _others_on_circle(candidates, rho)
-    if circle.proved_none:
-        return True  # every singularity is a candidate (FS Lemma VII.4)
-    if _irreducible(closure) and closure.nonlinear():
-        return True  # PS 2025 Thm 6.3, period 1
+    unique = _rule(period, circle.proved_none, closure)
+    if unique is not None:
+        return unique
     others = ", ".join(f"{s:.6g}" for s in circle.roots) or "none found numerically"
     warnings.warn(
         SingularityWarning(
