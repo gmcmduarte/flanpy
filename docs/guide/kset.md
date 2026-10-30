@@ -96,3 +96,25 @@ print(list(c.finite_part))
 
 A finite set can be iterated over; iterating over an infinite one raises
 `ValueError`.
+
+## Results that split again
+
+A {class}`flanpy.KCases` holds a result that takes different values on different
+`KSet`s. When the analysis of each value can itself depend on $k$,
+{meth}`~flanpy.KCases.flat_map` replaces every value by its own `KCases`, restricted to
+the piece it came from. Where an inner result is undecided, the outer one is too:
+
+```{code-cell} python
+from flanpy import KCases
+
+curves = KCases({KSet([(1, 53)]): "curve A", KSet([(54, None)]): "curve B"})
+
+
+def analyse(curve):
+    if curve == "curve A":  # splits again at k = 10 (and is cut back to [1, 53])
+        return KCases({KSet([(1, 9)]): "A, I", KSet([(10, None)]): "A, II"})
+    return KCases({KSet([(1, 100)]): "B, I"})  # undecided beyond 100
+
+
+print(curves.flat_map(analyse))
+```

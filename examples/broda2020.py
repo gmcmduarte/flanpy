@@ -22,16 +22,21 @@
 #   of $p_k$, eq. (18), is negative, zero and positive.
 # - Step 3 (elimination): done, eq. (17) for $L_k$ computed from the system (for every
 #   $k \ge 1$), and the curves of $R_k$ (radicand of eq. (2)) and $S_k$.
-# - Step 4 (singularity): $\rho_k$, $a_k$, and the Case I / Case II decision.
+# - Step 4 (singularity): done, $\rho_k$ of $R_k$ (the positive root of $\Delta_k$,
+#   §3.1, Case I) and of $L_k$ (the positive root of $p_k$, §3.4, Case II) for every
+#   $k \ge 1$, $\rho_{54} = 2/45$; $F_k$ in Case I. $\rho_k$ is the only singularity
+#   on $|z| = \rho_k$ for every $k$, including $k = 108$ (see below).
 # - Step 5 (Newton-Puiseux): $\alpha = 1/2$, eq. (32).
 # - Step 6 (transfer): eqs. (6)-(8) for $R_k$ and $S_k$.
 # - Step 7 (families in $k$): eqs. (35)-(38) and Table 1.
 
 # %%
 import time
+import warnings
 from fractions import Fraction
 from math import comb, factorial
 
+import mpmath
 from sympy import (
     Poly,
     diff,
@@ -45,7 +50,18 @@ from sympy import (
     symbols,
 )
 
-from flanpy import KSet, System, eliminate, eliminate_in_k, series, series_in_k
+from flanpy import (
+    KRoot,
+    KSet,
+    SingularityWarning,
+    System,
+    eliminate,
+    eliminate_in_k,
+    series,
+    series_in_k,
+    singularity,
+    singularity_in_k,
+)
 
 z, k = symbols("z k")
 R, S = symbols("R S")
@@ -275,3 +291,150 @@ print(f"eq. (17) at k = 1, 2, 10, 50, 54: satisfied by the series up to z^{N}")
 F = symbols("F")
 fk = System({B: ssnf.equations[B], Bb: ssnf.equations[Bb], F: z + B + Bb}, z=z, k=k)
 print("F_k:", eliminate_in_k(fk, F))
+
+# %% [markdown]
+# ## Step 4: the dominant singularity
+#
+# {func}`flanpy.singularity_in_k` gives the radius of convergence $\rho_k$ for every
+# $k \ge 1$, as a {class}`flanpy.KRoot` ("the $j$-th positive root of $f(z, k)$"), with
+# Case I ($w(\rho_k) = a_k$ finite) or Case II ($w \to \infty$), piece by piece.
+#
+# ### $R_k$
+#
+# §3.1 (p. 7): $\rho_k$ is the positive root of $\Delta_k = 1 - 2z - (7 + 8k) z^2$, the
+# radicand of eq. (2). At $\rho_k$ the square root vanishes, so
+# $a_k = R_k(\rho_k) = (1 - \rho_k)/(4 \rho_k)$, which works out to
+# $\sqrt{(k + 1)/2}$.
+
+# %%
+r_sing = singularity_in_k(r_cases)
+print(r_sing)
+((piece, s_r),) = r_sing.pieces
+assert piece == KSet.all() and s_r.case == "I" and s_r.unique is True
+assert s_r.rho == KRoot(delta, 0, k=k)
+assert s_r.a == KRoot(2 * R**2 - k - 1, 0, k=k)
+for n in (1, 2, 10, 50):
+    rho_n, a_n = s_r.specialize(n).rho, s_r.specialize(n).a
+    assert a_n is not None
+    with mpmath.workdps(50):
+        exact = (mpmath.sqrt(8 + 8 * n) - 1) / (7 + 8 * n)
+        assert abs(rho_n.evalf(50) - exact) < mpmath.mpf(10) ** -45
+        assert abs(a_n.evalf(50) - (1 - exact) / (4 * exact)) < mpmath.mpf(10) ** -45
+
+# %% [markdown]
+# ### $L_k$
+#
+# §3.4: the singularities of $L_k$ are zeros of $p_k$, and $\rho_k$ is its unique zero
+# in $]0, 1[$. flanpy finds, for every $k \ge 1$, that $\rho_k$ is the positive root
+# of $p_k$ and that $L_k$ is in Case II. The candidates are the roots of
+# $\operatorname{res}_w(G, \partial G / \partial w) = k^3 z^3 p_k^2 q_k^2$, with a
+# second cubic $q_k$. **Note:** §3.4 prints
+# $\operatorname{res}_w(G, \partial G/\partial w) =
+# z p_k(z) / (k^2 (4k^2 z^4 - 4k^2 z^3 + k(k + 24) z^2 + 4(k - 4) z - 4))$; this
+# differs from the computed resultant $k^3 z^3 p_k^2 q_k^2$; the conclusion stands; to
+# confirm with the authors.
+
+# %%
+q_k = (
+    (2 * k**3 + 36 * k**2 + 108 * k) * z**3
+    + (12 * k**2 + 72 * k) * z**2
+    + 15 * k * z
+    - 2
+)
+res = resultant(G, diff(G, W), W)
+assert expand(res - k**3 * z**3 * p_k**2 * q_k**2) == 0
+start = time.perf_counter()
+with warnings.catch_warnings():
+    warnings.simplefilter("error", SingularityWarning)  # uniqueness is decided
+    l_sing = singularity_in_k(l_cases)
+print(f"singularity_in_k(L_k): {time.perf_counter() - start:.1f} s")
+print(l_sing)
+((piece, s_l),) = l_sing.pieces
+assert piece == KSet.all() and s_l.rho == KRoot(p_k, 0, k=k)
+assert s_l.case == "II" and s_l.period == 1 and s_l.unique is True
+
+# %% [markdown]
+# The positive root of $q_k$ is a candidate below $\rho_k$, but not a singularity of the
+# series: the branch passes through it analytically (another pair of sheets meets
+# there). For Table 1's $k$, $\rho_k$ agrees with the positive root of $p_k$ computed by
+# mpmath, and with the coefficient ratio at $n = 1000$, corrected by
+# $((n + 1)/n)^{-1/2}$ for $[z^n] L_k \sim C \rho_k^{-n} n^{-1/2}$ (eq. (32),
+# $\alpha = 1/2$).
+
+# %%
+for n in (2, 10, 50):
+    rho_n = s_l.specialize(n).rho
+    (q_root,) = [r for r in Poly(q_k.subs(k, n), z).real_roots() if r > 0]
+    assert q_root < rho_n.as_expr()
+    with mpmath.workdps(50):
+        roots = mpmath.polyroots(
+            [int(c) for c in Poly(p_k.subs(k, n), z).all_coeffs()], extraprec=200
+        )
+        (positive,) = [
+            mpmath.re(r)
+            for r in roots
+            if abs(mpmath.im(r)) < mpmath.mpf(10) ** -30 and mpmath.re(r) > 0
+        ]
+        assert abs(rho_n.evalf(50) - positive) < mpmath.mpf(10) ** -40
+        c = series(ssnf, 1001, k=n)[L]
+        ratio = mpmath.mpf(c[1000].numerator) / c[1000].denominator
+        ratio /= mpmath.mpf(c[1001].numerator) / c[1001].denominator
+        ratio *= (mpmath.mpf(1001) / 1000) ** mpmath.mpf(-0.5)
+        error = abs(ratio / rho_n.evalf(50) - 1)
+        assert error < mpmath.mpf(10) ** -6
+    value = mpmath.nstr(rho_n.evalf(20), 15)
+    print(f"k = {n}: rho_k = {value}, ratio error {mpmath.nstr(error, 2)}")
+
+# %% [markdown]
+# **$k = 54$**: $p_{54} = 2 (45z - 2)(18z + 1)^2$, so $\rho_{54} = 2/45$. The value 54
+# is a root of the discriminant of $p_k$; it is checked separately and merges into the
+# generic piece.
+#
+# **$k = 108$**: $p_{108} = 4 (27z + 1)(972z^2 - 1)$, so $-\rho_{108}$ is also a root of
+# $p_{108}$ and lies on the circle $|z| = \rho_{108}$. It is not a singularity of
+# $L_{108}$. flanpy proves this from the structure of the system: its recursive
+# components, $\{B_k, \bar B_k\}$ (nonlinear) and $\{M_k, \bar M_k\}$ (linear), both
+# have period 1 (Wielandt and the daffodil lemma; see the Notes of
+# {func}`flanpy.singularity`). The coefficients agree: they show no $(-1)^n$ term.
+#
+# **Note on §3.4.** For $k > 54$ the paper argues that if $-\rho_k$ were a root, the
+# third root $\mu_k$ would satisfy $\mu_k = -9/(2k + 27) < 0$ and
+# $\mu_k = 1/(k(2k + 27)\rho_k^2) > 0$. In the text as we extracted it, the product of
+# the roots, $1/(k(2k + 27))$, gives $\mu_k = -1/(k(2k + 27)\rho_k^2) < 0$ instead,
+# with no contradiction, and $-\rho_k$ is a root exactly at $k = 108$. The conclusion
+# (uniqueness for every $k$) stands; to check against the printed text, then raise
+# with the authors.
+
+# %%
+at54 = s_l.specialize(54)
+assert at54.rho == Fraction(2, 45) and at54.rho.polynomial.as_expr() == 45 * z - 2
+assert expand(p_k.subs(k, 54) - 2 * (45 * z - 2) * (18 * z + 1) ** 2) == 0
+assert expand(p_k.subs(k, 108) - 4 * (27 * z + 1) * (972 * z**2 - 1)) == 0
+at108 = s_l.specialize(108)
+assert at108.rho.polynomial.as_expr() == 972 * z**2 - 1 and at108.unique is True
+mu = Fraction(-1, 27)  # the third root of p_108
+assert (
+    mu == Fraction(-9, 2 * 108 + 27) == -1 / (108 * (2 * 108 + 27) * Fraction(1, 972))
+)
+with mpmath.workdps(30):
+    c = series(ssnf, 400, k=108)[L]
+    rho = 1 / mpmath.sqrt(972)
+    scaled = [c[n] * rho**n * mpmath.sqrt(n) for n in (398, 399, 400)]
+    assert abs(2 * scaled[1] / (scaled[0] + scaled[2]) - 1) < mpmath.mpf(10) ** -5
+
+# %% [markdown]
+# ### $F_k$
+#
+# The denominator $F_k$ of eq. (38) has the same $\rho_k$ but is in Case I: $a_k$ is
+# the positive root of a cubic factor of $\operatorname{res}_z(p_k, G)$.
+
+# %%
+with warnings.catch_warnings():
+    warnings.simplefilter("error", SingularityWarning)
+    f_sing = singularity_in_k(eliminate_in_k(fk, F))
+((f_piece, s_f),) = f_sing.pieces
+assert f_piece == KSet.all()
+assert s_f.rho == KRoot(p_k, 0, k=k) and s_f.case == "I" and s_f.unique is True
+assert s_f.a is not None and s_f.a.polynomial.degree(F) == 3
+print("F_k: a_k =", s_f.a)
+print("F_2:", singularity(eliminate(fk, F, k=2)))

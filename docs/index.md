@@ -9,9 +9,12 @@ indexed by the alphabet size $k$.
 ```{warning}
 flanpy is pre-alpha. Only the input type {class}`flanpy.System`, its
 power-series coefficients ({func}`flanpy.series`, {func}`flanpy.series_in_k`),
-sets of alphabet sizes ({class}`flanpy.KSet`, {class}`flanpy.KCases`) and
+sets of alphabet sizes ({class}`flanpy.KSet`, {class}`flanpy.KCases`),
 elimination to one curve ({func}`flanpy.eliminate`, {func}`flanpy.eliminate_in_k`,
-{class}`flanpy.Curve`) are implemented so far, and the public API is not stable.
+{class}`flanpy.Curve`), exact real algebraic numbers ({class}`flanpy.AlgebraicReal`,
+{class}`flanpy.KRoot`) and the dominant singularity ({func}`flanpy.singularity`,
+{func}`flanpy.singularity_in_k`) are implemented so far, and the public API is not
+stable.
 ```
 
 ## Pipeline
@@ -41,6 +44,7 @@ The methods follow {cite:t}`broda-2020-sigact` and
 guide/system
 guide/kset
 guide/elimination
+guide/singularity
 ```
 
 ## Running examples
@@ -86,7 +90,7 @@ $ pip install flanpy
    :members: where, of, all, intervals, tail_start, is_finite, finite_part, isdisjoint
 
 .. autoclass:: flanpy.KCases
-   :members: pieces, covered, uncovered, tail, map, restrict, combine
+   :members: pieces, covered, uncovered, tail, map, restrict, combine, flat_map
 
 .. autofunction:: flanpy.eliminate
 
@@ -94,6 +98,23 @@ $ pip install flanpy
 
 .. autoclass:: flanpy.Curve
    :members: polynomial, w, z, k, kset, system, as_expr, specialize
+
+.. autoclass:: flanpy.AlgebraicReal
+   :members: polynomial, index, interval, refine, sign, evalf, as_expr
+
+.. autoclass:: flanpy.KRoot
+   :members: polynomial, positive_index, at
+
+.. autofunction:: flanpy.singularity
+
+.. autofunction:: flanpy.singularity_in_k
+
+.. autoclass:: flanpy.Singularity
+   :members: curve, rho, case, a, period, unique, k, kset, specialize
+
+.. autoexception:: flanpy.UndecidedSingularityError
+
+.. autoexception:: flanpy.SingularityWarning
 ```
 
 Well-posedness of a {class}`~flanpy.System` follows

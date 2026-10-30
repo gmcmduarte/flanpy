@@ -622,6 +622,30 @@ def test_kcases_map_restrict_combine() -> None:
     assert c.covered == a.covered & b.covered
 
 
+def test_kcases_flat_map() -> None:
+    """singularity.md §7: each value's own KCases, restricted to its piece."""
+    a = KCases({KSet([(1, 10)]): "x", KSet([(20, INF)]): "y"})  # [11, 19] uncovered
+
+    def split(v: str) -> KCases[str]:
+        if v == "x":  # extends beyond its piece: restricted to [1, 10]
+            return KCases({KSet([(1, 4)]): "x1", KSet([(5, 50)]): "x2"})
+        return KCases({KSet([(1, 30)]): "y1"})  # nothing beyond 30
+
+    r = a.flat_map(split)
+    assert r == KCases(
+        {KSet([(1, 4)]): "x1", KSet([(5, 10)]): "x2", KSet([(20, 30)]): "y1"}
+    )
+    # uncovered: the input's, plus each piece's part that its KCases leaves out
+    assert r.uncovered == KSet([(11, 19), (31, INF)])
+    # identity
+    assert a.flat_map(lambda v: KCases({KSet.all(): v})) == a
+    # a value whose KCases covers nothing of its piece
+    assert a.flat_map(lambda v: KCases({KSet.of(15): v})) == KCases({})
+    assert KCases({}).flat_map(split) == KCases({})
+    with pytest.raises(TypeError, match="returning KCases"):
+        a.flat_map(lambda v: v)  # type: ignore[arg-type, return-value]
+
+
 def test_kcases_value_semantics() -> None:
     a = KCases({KSet.of(1): sp.Integer(2), KSet([(2, INF)]): k})
     b = KCases([(KSet([(2, INF)]), k), (KSet.of(1), sp.Integer(2))])

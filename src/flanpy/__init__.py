@@ -7,10 +7,13 @@ elimination to a single algebraic curve ``G(z, w) = 0``, singularity analysis,
 Newton-Puiseux expansions, and transfer theorems for coefficient asymptotics,
 possibly for families indexed by the alphabet size ``k``.
 
-Pre-alpha: the input type :class:`System`, its power-series coefficients
-(:func:`series`, :func:`series_in_k`), sets of alphabet sizes :class:`KSet` and
-piecewise results :class:`KCases`, and elimination to a :class:`Curve`
-(:func:`eliminate`, :func:`eliminate_in_k`) are implemented so far.
+Pre-alpha: implemented so far are the input type :class:`System`, its power-series
+coefficients (:func:`series`, :func:`series_in_k`), sets of alphabet sizes
+:class:`KSet` and piecewise results :class:`KCases`, elimination to a :class:`Curve`
+(:func:`eliminate`, :func:`eliminate_in_k`), exact real algebraic numbers
+(:class:`AlgebraicReal`), and the dominant singularity, at a fixed ``k``
+(:func:`singularity`) and for symbolic ``k`` (:func:`singularity_in_k`,
+:class:`KRoot`).
 
 Examples
 --------
@@ -22,10 +25,18 @@ True
 
 from importlib.metadata import version as _version
 
+from flanpy._algebraic import AlgebraicReal, KRoot
 from flanpy._curve import Curve
 from flanpy._elimination import eliminate, eliminate_in_k
 from flanpy._kset import KCases, KSet
 from flanpy._series import series, series_in_k
+from flanpy._singularity import (
+    Singularity,
+    SingularityWarning,
+    UndecidedSingularityError,
+    singularity,
+    singularity_in_k,
+)
 from flanpy._system import (
     IllPosedSystemError,
     System,
@@ -37,11 +48,16 @@ from flanpy._system import (
 __version__: str = _version("flanpy")
 
 __all__ = [
+    "AlgebraicReal",
     "Curve",
     "IllPosedSystemError",
     "KCases",
+    "KRoot",
     "KSet",
+    "Singularity",
+    "SingularityWarning",
     "System",
+    "UndecidedSingularityError",
     "UndecidedSystemError",
     "WellPosednessError",
     "ZeroCoordinateWarning",
@@ -50,4 +66,6 @@ __all__ = [
     "eliminate_in_k",
     "series",
     "series_in_k",
+    "singularity",
+    "singularity_in_k",
 ]

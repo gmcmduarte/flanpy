@@ -581,6 +581,38 @@ def _key(poly: sp.Poly) -> tuple[Fraction, ...]:
 
 
 @lru_cache(maxsize=1024)
+def _breakpoints(
+    coeffs: tuple[Fraction, ...],
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Return the real roots ``>= 1`` of ``p != 0``: integer ones, floors of the rest.
+
+    ``coeffs`` are the coefficients of ``p`` in ``Q[k]``, highest degree first.
+    Returns ``(integer_roots, floors)``, both sorted, with one floor per non-integer
+    root (repeated when several roots lie between the same two integers). Exact:
+    kset.md, section 3, steps 1-2.
+    """
+    scale = math.lcm(*(c.denominator for c in coeffs))
+    ints = [int(c * scale) for c in coeffs]
+    k = sp.Dummy("k")
+    q = sp.Poly(ints, k, domain=sp.ZZ).sqf_part()
+    # 1. Integer roots >= 1, exactly. Dividing them out leaves a squarefree q with
+    # no integer root, so step 2 can refine until no interval holds an integer; no
+    # reliance on whether SymPy's isolating intervals are open or closed (for
+    # (k - 20)(3k - 61) it isolates 61/3 in (20, 21), and 20 is the other root).
+    integer_roots = sorted(int(r) for r in q.ground_roots() if r.is_integer and r >= 1)
+    for n in integer_roots:
+        q = q.exquo(sp.Poly(k - n, k, domain=sp.ZZ))
+    # 2. Floors of the other real roots >= 1 (exact VAS isolation, then refinement).
+    floors = []
+    if q.degree() > 0:
+        for (a, b), _ in q.intervals(inf=1):
+            while math.ceil(Fraction(a.p, a.q)) <= math.floor(Fraction(b.p, b.q)):
+                a, b = q.refine_root(a, b, eps=(b - a) / 4)
+            floors.append(math.floor(Fraction(a.p, a.q)))
+    return tuple(integer_roots), tuple(sorted(floors))
+
+
+@lru_cache(maxsize=1024)
 def _sign_pieces(coeffs: tuple[Fraction, ...]) -> tuple[_Piece, ...]:
     """Maximal integer intervals of ``k >= 1`` where ``p`` has constant sign.
 
@@ -603,21 +635,7 @@ def _sign_pieces(coeffs: tuple[Fraction, ...]) -> tuple[_Piece, ...]:
             v = v * n + c
         return (v > 0) - (v < 0)
 
-    k = sp.Dummy("k")
-    q = sp.Poly(ints, k, domain=sp.ZZ).sqf_part()
-    # 1. Integer roots >= 1, exactly. Dividing them out leaves a squarefree q with
-    # no integer root, so step 2 can refine until no interval holds an integer; no
-    # reliance on whether SymPy's isolating intervals are open or closed (for
-    # (k - 20)(3k - 61) it isolates 61/3 in (20, 21), and 20 is the other root).
-    integer_roots = sorted(int(r) for r in q.ground_roots() if r.is_integer and r >= 1)
-    for n in integer_roots:
-        q = q.exquo(sp.Poly(k - n, k, domain=sp.ZZ))
-    # 2. Floors of the other real roots >= 1 (exact VAS isolation, then refinement).
-    floors = []
-    for (a, b), _ in q.intervals(inf=1):
-        while math.ceil(Fraction(a.p, a.q)) <= math.floor(Fraction(b.p, b.q)):
-            a, b = q.refine_root(a, b, eps=(b - a) / 4)
-        floors.append(math.floor(Fraction(a.p, a.q)))
+    integer_roots, floors = _breakpoints(coeffs)
     # 3. Cut [1, ∞) between c and c + 1 for each cut c: on both sides of an integer
     # root n (c = n - 1, n), and at the floor m of any other root (c = m). No real
     # root lies in the span of a resulting interval, so the sign is constant on it.
@@ -819,6 +837,55 @@ class KCases[T]:
         return KCases(
             (s & t, f(a, b)) for s, a in self._pieces for t, b in other._pieces
         )
+
+    def flat_map[U](self, f: Callable[[T], KCases[U]]) -> KCases[U]:
+        """Replace every value by a ``KCases`` of its own, restricted to its piece.
+
+        For an analysis of each value that itself depends on ``k``: piece ``s`` with
+        value ``v`` contributes the pieces of ``f(v) & s``. The result is
+        uncovered where ``self`` is, and on each ``s`` where ``f(v)`` is
+        (singularity.md, section 7).
+
+        Parameters
+        ----------
+        f : callable
+            Maps a value to a :class:`KCases`.
+
+        Returns
+        -------
+        KCases
+            The pieces ``(t & s, u)`` for every piece ``(s, v)`` of ``self`` and
+            every piece ``(t, u)`` of ``f(v)``.
+
+        Raises
+        ------
+        TypeError
+            If ``f`` returns something other than a :class:`KCases`.
+
+        Examples
+        --------
+        >>> from flanpy._kset import KCases, KSet
+        >>> cases = KCases({KSet([(1, 9)]): "curve A", KSet([(10, None)]): "curve B"})
+        >>> def analyse(curve):
+        ...     if curve == "curve A":  # splits again at k = 5
+        ...         return KCases({KSet([(1, 4)]): "A, I", KSet([(5, None)]): "A, II"})
+        ...     return KCases({KSet([(1, 20)]): "B, I"})  # undecided beyond 20
+        >>> print(cases.flat_map(analyse))
+        [1, 4]: A, I
+        [5, 9]: A, II
+        [10, 20]: B, I
+        undecided: [21, ∞)
+        """
+        pieces: list[tuple[KSet, U]] = []
+        for s, value in self._pieces:
+            result = f(value)
+            if not isinstance(result, KCases):
+                raise TypeError(
+                    f"flat_map needs a function returning KCases, got "
+                    f"{type(result).__name__}"
+                )
+            pieces.extend((t & s, u) for t, u in result._pieces)
+        return KCases(pieces)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, KCases):
