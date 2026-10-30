@@ -2,8 +2,8 @@
 
 Status: approved 2026-10-30 with amendments (answers in Section 11). Implemented on
 branch `singularity`: chunks 2–4 (`AlgebraicReal`, `singularity`, `KRoot`,
-`singularity_in_k`). Finding of chunk 4: `k = 108` (Section 6.4). Chunk 5 (design,
-awaiting approval): uniqueness for reducible closures (Section 5.5).
+`singularity_in_k`). Finding of chunk 4: `k = 108` (Section 6.4). Chunk 5 (approved and
+implemented): uniqueness for reducible closures (Section 5.5), which settles `k = 108`.
 
 Build-order step 4. From a `Curve` `G(z, w, k) = 0` (step 3) and its branch, the series
 `w(z)` of `curve.system`, find the **dominant singularity** `ρ` of the branch (not of the
@@ -417,19 +417,36 @@ dependency order, every coordinate is analytic at `α`.
      right-hand sides telescope, so `θ · (walk exponent) ∈ 2πZ`, hence `θ ∈ (2π/p_C)Z`
      and `α = ρ`. Otherwise `I − B(α)` is invertible and `Y_C` is analytic at `α` (as in
      the proof of PS Thm 6.4, §6.4). `Y_C(ρ)` may be infinite (Case II); this is not used.
-   - *Nonlinear.* `Y_C(r)` stays bounded as `r → ρ`. If one coordinate were unbounded,
-     all would be (strongly connected, non-negative), and then so would an entry of `J`
-     on a cycle, so `Λ(J(r)) → ∞`, against `Λ(J(r)) < 1` (PS Lemma B.5; cf. Lemma B.2).
-     For the same reason, the inputs that occur in `H_C` are finite at `ρ`. So `Y_C` and
-     `J(z) = ∂Ĥ/∂Y(z, Y_C(z))` converge absolutely on the closed disk. If
-     `|Y_i(α)| = Y_i(ρ)` for all `i`, the daffodil lemma (PS Lemma 6.5) gives
-     `θ ∈ (2π/p_C)Z`. Otherwise `I − J(α)` must be singular (otherwise the implicit
-     function theorem continues `Y_C` across `α`). Then
-     `1 <= Λ(J(α)) <= Λ(J(ρ)) <= 1` (Wielandt; PS Lemma 6.8, Cor. B.6), and
-     `|J_ij(α)| = J_ij(ρ)` for every entry. An entry that depends on some `Y_k` (one
-     exists: `C` is nonlinear) has period dividing `Π(Y_k) = p_C` (PS Lemma 6.6), so the
-     daffodil lemma gives `θ ∈ (2π/p_C)Z`. In both cases `α = ρ` when `p_C = 1` (as in the
-     proof of PS Thm 6.3, §6.3).
+   - *Nonlinear.* First, `Y_C(r)` stays bounded as `r → ρ`. If one coordinate were
+     unbounded, all would be (strongly connected, non-negative), and then so would an
+     entry of `J` on a cycle, so `Λ(J(r)) → ∞`, against `Λ(J(r)) < 1` (PS Lemma B.5;
+     cf. Lemma B.2). For the same reason, the inputs that occur in `H_C` are finite at
+     `ρ`. So `Y_C` and `J(z) = ∂Ĥ/∂Y(z, Y_C(z))` converge absolutely on the closed disk,
+     with `|Y_k(α)| <= Y_k(ρ)` and `|J_ij(α)| <= J_ij(ρ)`. Now assume that `Y_C` is
+     singular at `α`.
+     - `I − J(α)` is singular: otherwise the implicit function theorem, applied to
+       `Y = Ĥ(z, Y)` at `(α, Y_C(α))`, continues `Y_C` analytically across `α`.
+     - So `J(α)` has the eigenvalue `1`, and `1 <= Λ(J(α)) <= Λ(J(ρ)) <= 1` (Wielandt,
+       PS Lemmas 6.7 and 6.8; Cor. B.6). Wielandt's equality case gives
+       `J(α) = D J(ρ) D^{-1}`, hence `|J_ij(α)| = J_ij(ρ)` for every entry.
+     - `C` is nonlinear, so some entry `J_ij` has a positive term containing some
+       `Y_k`. `J_ij(ρ)` is a sum of non-negative terms, so equality forces
+       `|t(α)| = t(ρ)` for each term `t`. A term is a product of non-negative factors,
+       each bounded by its value at `ρ`, so equality forces each factor to be equal,
+       in particular `|Y_k(α)| = Y_k(ρ)`.
+     - Daffodil lemma (PS Lemma 6.5): `|Y_k(ρ e^{iθ})| = Y_k(ρ)` means that `e^{inθ}`
+       is constant on the support of `Y_k`, so `θ ∈ (2π/Π(Y_k))Z = (2π/p_C)Z` (PS
+       Thm 6.2: one period for the component). With `p_C = 1`, `α = ρ`, a contradiction.
+
+   **Where the exactness of the BBY periods is used.** The rules of Section 5.2 (sum:
+   gcd of the periods and of the valuation differences; product: gcd of the periods)
+   are equalities, not just bounds, because no coefficient cancels: with non-negative
+   coefficients, the support of a sum is the union of the supports and that of a
+   product their sumset (BBY Prop. 2.9). So the computed `p_C` is the true `Π(Y_k)` in
+   the last step of the nonlinear case. In the linear case, the computed `v_ij`, `π_ij`
+   are the true valuation and period of `B_ij`, so the cycle period is the true gcd of
+   the closed-walk exponents. With cancellation, a support could shrink and the true
+   period exceed the computed one, and a computed `p_C = 1` would prove nothing.
 4. So every coordinate, and `w`, is analytic at `α`. ∎
 
 **PS hypotheses, checked.**
@@ -494,7 +511,7 @@ instead with `e_2 = −ρ_k^2 = −1/(4(2k + 27))` gives `k = 108` exactly, and 
 authors, like the resultant note: "the argument for `k > 54` has a sign error in
 `µ_k` and misses `k = 108`; the conclusion stands".
 
-**Chunk 5 implementation (after approval).**
+**Chunk 5 implementation (done).**
 - `_rule` gains the component rule (Tarjan SCCs, cycle period for linear components).
 - Tests: the spike's table, PS Example 23, the `k = 108` numerical check; `L_k` and `F_k`
   become one piece `[1, ∞)`, as the original acceptance asked.
@@ -618,12 +635,11 @@ the sample decides through the period.
 **`k = 108`** (found in chunk 4): `p_108 = 4(27z + 1)(972z^2 − 1)`, so
 `ρ_108 = 1/√972` and **`−ρ_108` is a candidate on the circle**. The closures of `L` and
 `F` are not irreducible (`L = M + M̄` over the linear `{M, M̄}` over `{B, B̄}`; `F = z + B
-+ B̄`), so Section 5.3 gives `unique = None` at `k = 108`, with `SingularityWarning`, and
-`{108}` is a separate piece (same `ρ`, case and `a`). In truth `ρ_108` is unique:
-`[z^n] L_108 · ρ^n · √n` shows no `(−1)^n` term at `n = 600` (test, slow), and a
-Wielandt argument on the linear component would prove it (Section 5.4; later work, like
-`W = z^2 + T`). Broda §3.4 states uniqueness for `k > 54`; how its argument treats
-`k = 108` is to be checked against the paper.
++ B̄`), so Section 5.3 gave `unique = None` at `k = 108`, with `SingularityWarning`, and
+`{108}` was a separate piece (same `ρ`, case and `a`). **Settled in chunk 5 by the
+component rule of Section 5.5: one piece `[1, ∞)`, `unique = True`.** The coefficients
+agree: `[z^n] L_108 · ρ^n · √n` shows no `(−1)^n` term at `n = 600` (test, slow).
+Broda §3.4's argument for `k > 54` misses `k = 108` (Section 5.5).
 
 **`k = 54`** for `L_k`: `p_54 = 2(45z − 2)(18z + 1)^2`. The complex pair of `p_k`
 (`k <= 53`) collides at `−1/18`, which is also a root of `q_54`

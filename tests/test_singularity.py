@@ -26,7 +26,18 @@ from flanpy import (
 )
 from flanpy._algebraic import AlgebraicReal, _positive_roots
 from flanpy._elimination import _closure
-from flanpy._singularity import _Above, _Below, _candidates, _Closure, _compare
+from flanpy._singularity import (
+    _Above,
+    _Below,
+    _candidates,
+    _Closure,
+    _compare,
+    _component_periods,
+    _components,
+    _cycle_period,
+    _periods,
+    _valuations,
+)
 
 z, k = sp.symbols("z k")
 B, Bb, M, Mb, L, F, G, R, A, T, U, W = sp.symbols("B Bb M Mb L F G R A T U W")
@@ -62,6 +73,14 @@ UNRELATED = System(
 PERIODIC = System({T: z + z * T**2}, z=z)
 # W is aperiodic but singular at ±1/2, like T.
 APERIODIC_TWO = System({T: z + z * T**2, W: z**2 + T}, z=z)
+# PS 2025 Example 23: linear, coordinate periods 1, cycle period 5; singular at the
+# fifth roots of unity.
+AE, BE = sp.symbols("A_e B_e")
+PS_EXAMPLE_23 = System({AE: z**2 + z**2 * BE, BE: z**3 + z**3 * AE}, z=z)
+# A critical input of period 2 (S = 1 - sqrt(1 - z^2), radius 1) feeding Y of period
+# 1 and radius 1: Y is singular at -1 too (singularity.md, section 5.5).
+S, Y = sp.symbols("S Y")
+CRITICAL_INPUT = System({S: (z**2 + S**2) / 2, Y: z + z**2 + z * S * Y**2 / 100}, z=z)
 
 P_K = 4 * k * (2 * k + 27) * z**3 + 36 * k * z**2 - k * z - 4  # Broda eq. (18)
 Q_K = (
@@ -183,7 +202,7 @@ def test_periodic() -> None:
 
 
 def test_undecided_uniqueness_warns() -> None:
-    """Period 1, -1/2 on the circle, closure not irreducible: unique is None."""
+    """Period 1, -1/2 on the circle, T's component has period 2: unique is None."""
     with pytest.warns(SingularityWarning, match=r"undecided.*-0\.5"):
         s = singularity(eliminate(APERIODIC_TWO, W))
     assert s.period == 1 and s.unique is None and s.rho == Fraction(1, 2)
@@ -401,3 +420,123 @@ def test_random_systems(system: System) -> None:
         c = series(system, 201)[F]
         ratio = Fraction(c[200]) / Fraction(c[201])
         assert abs(float(ratio) / float(s.rho) - 1) < 0.1
+
+
+# -- reducible closures: the component rule (singularity.md, section 5.5) -------------
+
+
+def names(closure: _Closure, component: list[int]) -> list[str]:
+    return [str(closure.unknowns[i]) for i in component]
+
+
+def test_components_in_dependency_order() -> None:
+    closure = closure_of(SSNF, L, 108)
+    assert [names(closure, c) for c in _components(closure)] == [
+        ["B", "Bb"],
+        ["M", "Mb"],
+        ["L"],
+    ]
+    found = [(names(closure, c), nl, p) for c, nl, p in _component_periods(closure)]
+    assert found == [(["B", "Bb"], True, 1), (["M", "Mb"], False, 1)]
+
+
+def test_cycle_period() -> None:
+    """PS Example 23: coordinate periods 1, cycle period 5; L_k's (M, Mb): 1."""
+    closure = closure_of(PS_EXAMPLE_23, AE)
+    assert _periods(closure) == [1, 1]
+    val, per = _valuations(closure), _periods(closure)
+    assert _cycle_period(closure, [0, 1], val, per) == 5
+    for n in (2, 108):
+        closure = closure_of(SSNF, L, n)
+        m = [closure.unknowns.index(M), closure.unknowns.index(Mb)]
+        val, per = _valuations(closure), _periods(closure)
+        assert _cycle_period(closure, sorted(m), val, per) == 1
+    # a single equation with a self-loop: C = 1 + 2 z^4 C has cycle period 4
+    C = sp.Symbol("C")
+    closure = closure_of(System({C: 1 + 2 * z**4 * C}, z=z), C)
+    assert _cycle_period(closure, [0], _valuations(closure), _periods(closure)) == 4
+
+
+@pytest.mark.parametrize(
+    ("system", "w", "n", "unique", "period"),
+    [
+        (SSNF, L, 108, True, 1),  # {B, Bb} nonlinear 1, {M, Mb} linear 1
+        (FK, F, 108, True, 1),  # {B, Bb} nonlinear 1
+        (APERIODIC_TWO, W, None, None, 1),  # {T} has period 2
+        (PERIODIC, T, None, False, 2),  # the period of w
+        (PS_EXAMPLE_23, AE, None, None, 1),  # cycle period 5
+        (CONSTRUCTED, F, None, True, 1),  # {G} has period 2; the circle test decides
+        (CRITICAL_INPUT, Y, None, None, 1),  # {S} has period 2: not True
+    ],
+)
+def test_component_rule(
+    system: System, w: sp.Symbol, n: int | None, unique: bool | None, period: int
+) -> None:
+    curve = eliminate(system, w, k=n) if n is not None else eliminate(system, w)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        s = singularity(curve)
+    assert s.unique is unique and s.period == period
+    warned = [w for w in caught if issubclass(w.category, SingularityWarning)]
+    assert len(warned) == (unique is None)
+    if unique is None:
+        assert "has period" in str(warned[0].message)
+
+
+def test_l_108_minus_rho_is_regular() -> None:
+    """The (M, Mb) block of J at k = 108: spectral radius 1 at ρ = 1/sqrt(972), and
+    both eigenvalues of modulus 0.4226 < 1 at -ρ (singularity.md, section 5.5)."""
+    s_b = singularity(eliminate(SSNF, B, k=108))
+    s_bb = singularity(eliminate(SSNF, Bb, k=108))
+    assert s_b.rho == singularity(eliminate(SSNF, L, k=108)).rho  # {B, Bb} critical
+    assert s_b.a is not None and s_bb.a is not None
+    with mpmath.workdps(30):
+        rho = 1 / mpmath.sqrt(972)
+
+        def block(x: Any, b: Any, bb: Any) -> Any:
+            return mpmath.matrix(
+                [
+                    [4 * x * b + 2 * x * bb, 2 * x * b + 2 * x],
+                    [2 * x * bb, 2 * x * b + 4 * x * bb],
+                ]
+            )
+
+        at_rho = mpmath.eig(block(rho, s_b.a.evalf(30), s_bb.a.evalf(30)))[0]
+        assert abs(max(abs(e) for e in at_rho) - 1) < mpmath.mpf(10) ** -20
+        x = -rho
+        b, bb = mpmath.mpf(0), mpmath.mpf(0)
+        for _ in range(200):  # Kleene at -ρ, inside the disk of (B, Bb)
+            b, bb = (
+                2 * x * b**2 + 2 * x * b * bb + 2 * x * bb,
+                108 * x + 2 * x * b * bb + 2 * x * bb**2,
+            )
+        b, bb = mpmath.findroot(
+            lambda u, v: (
+                2 * x * u**2 + 2 * x * u * v + 2 * x * v - u,
+                108 * x + 2 * x * u * v + 2 * x * v**2 - v,
+            ),
+            (b, bb),
+        )
+        moduli = [abs(e) for e in mpmath.eig(block(x, b, bb))[0]]
+        assert all(
+            abs(m - mpmath.mpf("0.42265")) < mpmath.mpf(10) ** -4 for m in moduli
+        )
+
+
+@pytest.mark.slow
+def test_critical_input_is_singular_at_minus_one() -> None:
+    """CRITICAL_INPUT: Y has period 1 but a (-1)^n component in its coefficients,
+    ~ n^(-7/2) against n^(-3/2): Y is singular at -1, so True would be wrong."""
+    y = series(CRITICAL_INPUT, 402)[Y]
+    with mpmath.workdps(40):
+        e = {
+            n: mpmath.mpf(y[n].numerator) / y[n].denominator * mpmath.mpf(n) ** 1.5
+            for n in range(380, 403)
+        }
+        alternating = [
+            (-1) ** n * (e[n] - (e[n - 1] + e[n + 1]) / 2) * n**2
+            for n in (381, 391, 401)
+        ]
+    assert all(
+        abs(a + mpmath.mpf("0.0308")) < mpmath.mpf("0.0005") for a in alternating
+    )

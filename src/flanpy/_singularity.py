@@ -80,9 +80,11 @@ class UndecidedSingularityError(ValueError):
 class SingularityWarning(UserWarning):
     """Whether ``ρ`` is the only dominant singularity is undecided.
 
-    Emitted by :func:`singularity` when other candidates lie on the circle
-    ``|z| = ρ`` (or may, by a numerical identification) and neither the period
-    nor Pivoteau-Salvy (2025) Thm 6.3 decides; ``unique`` is then ``None``.
+    Emitted by :func:`singularity` and :func:`singularity_in_k` when other
+    candidates lie on the circle ``|z| = ρ`` (or may, by a numerical
+    identification) and neither the period of ``w`` nor the component rule (every
+    recursive component of the closure has period 1; Notes of :func:`singularity`)
+    decides; ``unique`` is then ``None``.
 
     Examples
     --------
@@ -284,9 +286,10 @@ class Singularity[X: (AlgebraicReal, KRoot)]:
     def unique(self) -> bool | None:
         """Whether ``ρ`` is the only singularity of ``w`` on ``|z| = ρ``.
 
-        ``True`` is proved (no other candidate on the circle; or Pivoteau-Salvy
-        2025 Thm 6.3), ``False`` is proved (``period > 1``: every ``ρ e^{2iπj/p}``
-        is a singularity), and ``None`` is undecided.
+        ``True`` is proved (no other candidate on the circle; or every recursive
+        component of the closure has period 1, see Notes of :func:`singularity`),
+        ``False`` is proved (``period > 1``: every ``ρ e^{2iπj/p}`` is a
+        singularity), and ``None`` is undecided.
 
         Examples
         --------
@@ -558,6 +561,45 @@ def singularity(curve: Curve, *, k: int | None = None) -> Singularity[AlgebraicR
     so after a budget of rounds the comparison moves ``q`` to another rational in
     the same gap between candidates (where the answer is the same).
 
+    **Uniqueness** (singularity.md, sections 5.3 and 5.5). ``unique`` is ``False``
+    if the period of ``w`` exceeds 1; ``True`` if an exact circle test proves that
+    no other candidate lies on ``|z| = ρ`` (FS Lemma VII.4), or if every recursive
+    strongly connected component ``C`` of the closure has period ``p_C = 1``; and
+    ``None`` otherwise (with a :class:`SingularityWarning`). For a nonlinear ``C``,
+    ``p_C`` is the common period of its coordinates (PS Thm 6.2); for a linear
+    ``C`` (``Y_C = A + B Y_C``) it is the cycle period, the gcd of the exponents of
+    the closed walks in the graph of ``B`` (the period of the diagonal of
+    ``(I - B)^{-1}``, PS Thm 6.4). Both come from the support by the
+    Bell-Burris-Yeats rules (PS §7.1), which are exact because no coefficient
+    cancels; a computed ``1`` is therefore the true period.
+
+    *Proof of the rule.* Let ``σ = ρ e^{iθ} != ρ``. By induction over the
+    components in dependency order, every coordinate is analytic at ``σ``. Each
+    coordinate has radius ``>= ρ`` (no cancellation), so only components of
+    radius ``ρ`` need an argument; a nonrecursive coordinate is a polynomial in
+    ``z`` and earlier ones. For a recursive ``C`` of radius ``ρ``, the earlier
+    solutions ``S`` are analytic at ``σ`` (induction), so
+    ``Ĥ(z, Y) = H_C(z, S(z), Y)``, an irreducible system (PS Lemma 3.6), is
+    polynomial in ``Y`` with coefficients analytic at ``σ``. This is what the
+    proofs of PS Thm 6.3 and 6.4 need, also when an input is itself critical (as
+    ``{B, B̄}`` for Broda's ``L_k``). *Linear:* for ``r < ρ``,
+    ``Λ(B(r)) < 1``, and since each edge of ``C`` lies on a cycle the entries stay
+    bounded, so ``|B_ij(σ)| <= B_ij(ρ) < ∞``. If ``1`` is an eigenvalue of
+    ``B(σ)``, Wielandt (PS Lemma 6.7) gives ``B(σ) = D B(ρ) D^{-1}``,
+    ``D = diag(e^{iφ_j})``, so ``e^{inθ} = e^{i(φ_i - φ_j)}`` for every ``n`` in the
+    support of ``B_ij``. Around a closed walk this telescopes, so
+    ``θ ∈ (2π/p_C)Z``, and ``σ = ρ``. Otherwise ``Y_C = (I - B)^{-1} A`` is analytic
+    at ``σ``. *Nonlinear:* ``Y_C`` and ``J = ∂Ĥ/∂Y`` stay bounded as ``z → ρ``
+    (an unbounded coordinate would make an entry of ``J`` on a cycle, and ``Λ``,
+    unbounded, against ``Λ < 1`` below ``ρ``, PS Lemma B.5). Assume ``Y_C`` is
+    singular at ``σ``. Then ``I - J(σ)`` is singular (otherwise the implicit
+    function theorem continues ``Y_C``), so ``1 <= Λ(J(σ)) <= Λ(J(ρ)) <= 1``, and
+    Wielandt (PS Lemmas 6.7, 6.8) forces ``|J_ij(σ)| = J_ij(ρ)`` for every entry.
+    An entry with a positive term containing some ``Y_k`` (``C`` is nonlinear) then
+    forces ``|Y_k(σ)| = Y_k(ρ)``: every term, and every factor of it, is bounded by
+    its value at ``ρ``. The daffodil lemma (PS Lemma 6.5) gives
+    ``θ ∈ (2π/Π(Y_k))Z = (2π/p_C)Z``, so ``σ = ρ``: a contradiction. ∎
+
     Examples
     --------
     Catalan, ``F = 1 + zF^2``: ``ρ = 1/4``, ``F(1/4) = 2`` (FS Note VII.36).
@@ -732,7 +774,8 @@ def singularity_in_k(curves: Curve | KCases[Curve]) -> KCases[Singularity[Any]]:
     (``Ñ'(0, k) != 0``).
 
     (6) The period depends only on the support of the closure (PS §7.1), so it is
-    constant. On ``I``, ``unique`` is decided by the table of section 5.3 with an
+    constant, and so are the component periods ``p_C``. On ``I``, ``unique`` is
+    decided by the table of section 5.5 with an
     exact circle test in ``k``: let ``μ`` be the factor of ``Res_z(f, y - z^2)``
     that vanishes at ``ρ_k^2`` (the same on ``I``: two factors share ``ρ_k^2`` only
     where ``-ρ_k`` is a root of ``f``). If neither ``Res_z(f, f'(-z))`` nor
@@ -742,7 +785,9 @@ def singularity_in_k(curves: Curve | KCases[Curve]) -> KCases[Singularity[Any]]:
     non-real ``σ`` makes ``σσ̄ = ρ_k^2`` a common root of ``μ(·, k)`` and
     ``Q_f'(·, k)`` (leading coefficients do not vanish: ``lc_z f``). So
     ``unique`` is ``True`` (FS Lemma VII.4). Otherwise the period (``False``) or
-    PS Thm 6.3 (``True``, structural) decides, or ``unique`` is ``None``. ∎
+    the component rule (``True``; Notes of :func:`singularity`, which hold at
+    every real ``k`` of ``I``: they use only the support) decides, or ``unique`` is
+    ``None``. ∎
 
     Merging needs no argument: each piece's description is proved on each of its
     parts. Sources as for :func:`singularity`; Perron-Frobenius in the form of PS
@@ -1276,9 +1321,6 @@ class _Closure:
             {j for _, _, e in row for j in range(self.m) if e[j]} for row in self.terms
         ]
 
-    def nonlinear(self) -> bool:
-        return any(sum(e) >= 2 for row in self.terms for _, _, e in row)
-
 
 # -- exact linear algebra ------------------------------------------------------------
 
@@ -1570,12 +1612,14 @@ def _valuations(closure: _Closure) -> list[int]:
         val = new
 
 
-def _period(closure: _Closure, target: int) -> int:
-    """Return the period of coordinate ``target`` (PS 2025 §7.1, Algorithm Periods).
+def _periods(closure: _Closure) -> list[int]:
+    """Return the periods of all coordinates (PS 2025 §7.1, Algorithm Periods).
 
     The rules are Bell-Burris-Yeats's: ``Π(sum) = gcd(Π's, valuation differences)``
     and ``Π(product) = gcd(Π's)``, iterated to a fixed point from ``0``. They are
-    exact because no coefficient cancels (non-negative coefficients).
+    exact, not just bounds, because no coefficient cancels (non-negative
+    coefficients: the support of a sum is the union of the supports, that of a
+    product their sumset; BBY Prop. 2.9). Section 5.5 relies on this exactness.
     """
     val = _valuations(closure)
     per = [0] * closure.m
@@ -1589,38 +1633,142 @@ def _period(closure: _Closure, target: int) -> int:
                 g = math.gcd(g, *factors, v - val[i])
             new.append(g)
         if new == per:
-            return per[target]
+            return per
         per = new
 
 
-# -- uniqueness (singularity.md, section 5.3) ----------------------------------------
+def _period(closure: _Closure, target: int) -> int:
+    """Return the period of coordinate ``target`` (see :func:`_periods`)."""
+    return _periods(closure)[target]
 
 
-def _irreducible(closure: _Closure) -> bool:
-    """Tell whether the closure is irreducible (PS Def. 3.2): strongly connected."""
+# -- uniqueness (singularity.md, sections 5.3 and 5.5) -------------------------------
+
+
+def _components(closure: _Closure) -> list[list[int]]:
+    """Return the strongly connected components, each after those it depends on.
+
+    Tarjan's algorithm on the dependency graph (``i -> j`` when ``H_i`` depends on
+    ``Y_j``); it emits a component once everything reachable from it is emitted.
+    """
+    graph = [sorted(edges) for edges in closure.graph()]
+    index: dict[int, int] = {}
+    low: dict[int, int] = {}
+    stack: list[int] = []
+    on_stack: set[int] = set()
+    out: list[list[int]] = []
+    for root in range(closure.m):
+        if root in index:
+            continue
+        work = [(root, 0)]  # (vertex, position in its edge list), iteratively
+        while work:
+            v, position = work.pop()
+            if position == 0:
+                index[v] = low[v] = len(index)
+                stack.append(v)
+                on_stack.add(v)
+            for p in range(position, len(graph[v])):
+                u = graph[v][p]
+                if u not in index:
+                    work.append((v, p + 1))
+                    work.append((u, 0))
+                    break
+                if u in on_stack:
+                    low[v] = min(low[v], index[u])
+            else:
+                if low[v] == index[v]:
+                    component = []
+                    while True:
+                        u = stack.pop()
+                        on_stack.discard(u)
+                        component.append(u)
+                        if u == v:
+                            break
+                    out.append(sorted(component))
+                if work:
+                    parent = work[-1][0]
+                    low[parent] = min(low[parent], low[v])
+    return out
+
+
+def _cycle_period(
+    closure: _Closure, component: Sequence[int], val: Sequence[int], per: Sequence[int]
+) -> int:
+    """Return the cycle period of a linear component (singularity.md, section 5.5).
+
+    The gcd of the exponents of the closed walks in the graph of
+    ``B = ∂H_C/∂Y_C``, where an edge ``i -> j`` may use any exponent of the support
+    of ``B_ij``, a polynomial in ``z`` and earlier coordinates with valuation
+    ``v_ij`` and period ``π_ij`` (exact BBY rules). With potentials ``d`` along a
+    spanning tree (``d_j = d_i + v_ij``), it is ``gcd(d_i + v_ij - d_j, π_ij)``
+    over the edges. It is the period of the diagonal of ``(I - B)^{-1}`` (PS 2025
+    Thm 6.4, Algorithm Irr-DS), and can exceed the coordinate period (PS Example
+    23: coordinates of period 1, cycle period 5).
+    """
+    weight: dict[tuple[int, int], int] = {}
+    period: dict[tuple[int, int], int] = {}
+    for i in component:
+        for j in component:
+            terms = closure.jacobian_terms[i][j]
+            if not terms:
+                continue
+            exponents = [
+                ez + sum(e_u * val[u] for u, e_u in enumerate(e)) for _, ez, e in terms
+            ]
+            v = min(exponents)
+            weight[i, j] = v
+            period[i, j] = math.gcd(
+                *(x - v for x in exponents),
+                *(per[u] for _, _, e in terms for u, e_u in enumerate(e) if e_u),
+            )
+    d = {component[0]: 0}
+    todo = [component[0]]
+    while todo:  # a spanning tree (the component is strongly connected)
+        i = todo.pop()
+        for (a, b), v in weight.items():
+            if a == i and b not in d:
+                d[b] = d[a] + v
+                todo.append(b)
+    return math.gcd(
+        *(d[a] + v - d[b] for (a, b), v in weight.items()), *period.values()
+    )
+
+
+def _component_periods(closure: _Closure) -> list[tuple[list[int], bool, int]]:
+    """Return ``(component, nonlinear, p_C)`` for each recursive component.
+
+    ``p_C`` is the common period of the coordinates for a nonlinear component (PS
+    Thm 6.2) and the cycle period for a linear one (singularity.md, section 5.5).
+    """
+    val = _valuations(closure)
+    per = _periods(closure)
     graph = closure.graph()
-    if not any(graph):
-        return False
-    for start in range(closure.m):
-        seen, todo = {start}, [start]
-        while todo:
-            for j in graph[todo.pop()]:
-                if j not in seen:
-                    seen.add(j)
-                    todo.append(j)
-        if len(seen) != closure.m:
-            return False
-    return True
+    out = []
+    for component in _components(closure):
+        inside = set(component)
+        if not any(graph[i] & inside for i in component):
+            continue  # nonrecursive: a polynomial in z and earlier coordinates
+        nonlinear = any(
+            sum(e[j] for j in component) >= 2
+            for i in component
+            for _, _, e in closure.terms[i]
+        )
+        if nonlinear:
+            p = per[component[0]]
+        else:
+            p = _cycle_period(closure, component, val, per)
+        out.append((component, nonlinear, p))
+    return out
 
 
 def _rule(period: int, proved_none: bool, closure: _Closure) -> bool | None:
-    """Decide ``unique`` by the table of singularity.md, section 5.3."""
+    """Decide ``unique`` by the table of singularity.md, section 5.5."""
     if period > 1:
         return False  # every ρ e^{2iπj/p} is a singularity (Pringsheim for V)
     if proved_none:
         return True  # every singularity is a candidate (FS Lemma VII.4)
-    if _irreducible(closure) and closure.nonlinear():
-        return True  # PS 2025 Thm 6.3, period 1
+    if all(p == 1 for _, _, p in _component_periods(closure)):
+        return True  # section 5.5: every recursive component has period 1
     return None
 
 
@@ -1634,11 +1782,17 @@ def _unique(
     if unique is not None:
         return unique
     others = ", ".join(f"{s:.6g}" for s in circle.roots) or "none found numerically"
+    periodic = "; ".join(
+        f"{{{', '.join(str(closure.unknowns[i]) for i in component)}}} has period {p}"
+        for component, _, p in _component_periods(closure)
+        if p != 1
+    )
     warnings.warn(
         SingularityWarning(
             f"uniqueness of the dominant singularity of {w} is undecided: other "
-            f"candidates on |z| = ρ: {others}; the closure is not irreducible and "
-            "nonlinear, so Pivoteau-Salvy (2025) Thm 6.3 does not apply"
+            f"candidates on |z| = ρ: {others}; a recursive component of the "
+            f"closure is periodic ({periodic}), so the rule of singularity.md, "
+            "section 5.5 does not apply"
         ),
         stacklevel=4,
     )

@@ -53,13 +53,12 @@ FK = System(
     k=k,
 )
 P_K = 4 * k * (2 * k + 27) * z**3 + 36 * k * z**2 - k * z - 4  # Broda eq. (18)
-GENERIC = KSet([(1, 107), (109, None)])  # L_k and F_k: k = 108 is undecided
 
 
 def in_k(curves: object) -> KCases[Singularity]:  # type: ignore[type-arg]
-    """singularity_in_k, with the SingularityWarning (k = 108) ignored."""
+    """singularity_in_k, with a SingularityWarning turned into an error."""
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", SingularityWarning)
+        warnings.simplefilter("error", SingularityWarning)
         return singularity_in_k(curves)  # type: ignore[arg-type]
 
 
@@ -164,24 +163,22 @@ def test_hitchhiker_a_k() -> None:
 
 
 def test_broda_l_k_pieces() -> None:
-    """ρ_k = the positive root of p_k (eq. (18)), Case II, for every k >= 1.
+    """ρ_k = the positive root of p_k (eq. (18)), Case II, unique, for every k >= 1.
 
-    k = 54 is a cut and merges. At k = 108, p_108 = 4(27z + 1)(972z^2 - 1), so
-    -ρ_108 is a candidate on the circle; the closure of L is not irreducible, so
-    uniqueness there is undecided (singularity.md, section 6.4).
+    One piece [1, ∞), and no SingularityWarning. k = 54 is a cut and merges. At
+    k = 108, p_108 = 4(27z + 1)(972z^2 - 1) puts -ρ_108 on the circle; the component
+    rule (singularity.md, section 5.5) proves uniqueness there.
     """
+    curves = eliminate_in_k(SSNF, L)
     start = time.perf_counter()
-    with pytest.warns(SingularityWarning, match=r"undecided for k in \{108\}"):
-        cases = singularity_in_k(eliminate_in_k(SSNF, L))
-    print(f"singularity_in_k(eliminate_in_k(L_k)): {time.perf_counter() - start:.1f} s")
-    (generic, s), (exceptional, s108) = cases.pieces
-    assert generic == GENERIC and exceptional == KSet.of(108)
-    assert cases.covered == KSet.all()
+    cases = in_k(curves)
+    print(f"singularity_in_k(L_k): {time.perf_counter() - start:.1f} s")
+    ((piece, s),) = cases.pieces
+    assert piece == KSet.all() and s.kset == KSet.all()
     assert s.rho == KRoot(P_K, 0, k=k) and s.case == "II" and s.a is None
-    assert s.period == 1 and s.unique is True and s.kset == GENERIC
-    assert s108.rho == KRoot(P_K, 0, k=k) and s108.case == "II"
-    assert s108.unique is None
-    assert s108.specialize(108).rho.polynomial.as_expr() == 972 * z**2 - 1
+    assert s.period == 1 and s.unique is True
+    at108 = s.specialize(108)
+    assert at108.rho.polynomial.as_expr() == 972 * z**2 - 1 and at108.unique is True
 
 
 def test_broda_l_k_cuts() -> None:
@@ -193,7 +190,7 @@ def test_broda_l_k_cuts() -> None:
     assert points == {54}
     assert spans == [(1, 35), (36, 53), (55, None)]
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", SingularityWarning)
+        warnings.simplefilter("error", SingularityWarning)
         family.run()
     (second,) = family._second.values()
     points, spans = _layout([*family.first, *second.polys], k)
@@ -203,7 +200,7 @@ def test_broda_l_k_cuts() -> None:
 
 def check_lk(cases: KCases[Singularity], curves: KCases[flanpy.Curve], n: int) -> None:  # type: ignore[type-arg]
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", SingularityWarning)
+        warnings.simplefilter("error", SingularityWarning)
         fixed = singularity(curves[n], k=n)
         assert cases[n].specialize(n) == fixed
     p = sp.Poly(P_K.subs(k, n), z)
@@ -254,16 +251,13 @@ def test_broda_f_k() -> None:
     """F_k = z + B + Bb (eq. (38)'s denominator): Case I, a_k a root of a cubic."""
     curves = eliminate_in_k(FK, F)
     cases = in_k(curves)
-    (generic, s), (exceptional, s108) = cases.pieces
-    assert generic == GENERIC and exceptional == KSet.of(108)
+    ((piece, s),) = cases.pieces
+    assert piece == KSet.all()
     assert s.rho == KRoot(P_K, 0, k=k) and s.case == "I" and s.unique is True
     assert isinstance(s.a, KRoot) and s.a.polynomial.degree(F) == 3
     assert s.a.polynomial.degree(k) > 0
-    assert s108.unique is None and s108.a == s.a
     for n in (1, 2, 54, 55, 77, 108):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", SingularityWarning)
-            assert cases[n].specialize(n) == singularity(curves[n], k=n)
+        assert cases[n].specialize(n) == singularity(curves[n], k=n)
 
 
 # -- KCases input ---------------------------------------------------------------------
@@ -326,3 +320,13 @@ def test_specialize_errors() -> None:
     assert fixed.k is None and fixed.kset == KSet.of(2)
     with pytest.raises(ValueError, match="at a fixed k"):
         fixed.specialize(2)
+
+
+def test_undecided_piece_warns() -> None:
+    """W = z^2 + T with T = z + kzT^2: T's component has period 2 (section 5.5)."""
+    W = sp.Symbol("W")
+    system = System({T: z + k * z * T**2, W: z**2 + T}, z=z, k=k)
+    with pytest.warns(SingularityWarning, match=r"undecided for k in \[1, ∞\)"):
+        cases = singularity_in_k(eliminate_in_k(system, W))
+    ((piece, s),) = cases.pieces
+    assert piece == KSet.all() and s.unique is None and s.period == 1
