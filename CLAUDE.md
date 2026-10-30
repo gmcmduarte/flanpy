@@ -106,6 +106,8 @@ src/flanpy/
                  (design: dev/design/singularity.md)
   _singularity.py  Singularity, singularity / singularity_in_k: certificates, window
                  test (Case I/II, a), period, uniqueness, projection set in k
+  _field.py      real number fields Q(θ) (exact arithmetic, signs, to AlgebraicReal),
+                 real roots over Q(θ) by Trager norms (design: dev/design/newton.md §4)
   _newton.py     Newton polygon, Newton-Puiseux (design: dev/design/newton.md)
   _transfer.py   Thm 3.1 / 3.2, square-root case
   _families.py   expansions in 1/k

@@ -1,6 +1,7 @@
 # Design note: `newton`
 
-Status: approved 2026-10-30 (decisions in Section 11). Chunk 2 (`_field.py`) in progress.
+Status: approved 2026-10-30 (decisions in Section 11). Chunk 2 (`_field.py`, Section 4.4)
+implemented.
 
 Build-order step 5. From a `Singularity` (step 4): the **local expansion** of the branch
 `w(z)` at its dominant singularity `ρ`. That means the exponent `α`, the ramification
@@ -347,6 +348,33 @@ is still tested at the private level. `Q = Y^10 − s^4 Y^2 − s^5` at a
 rational point has the edge `(0, 5)–(2, 4)–(10, 0)` and
 `φ(c) = c^10 − c^2 − 1 = ψ(c^2)` with `ψ(u) = u^5 − u − 1` (Galois group `S_5`). Its 2
 real roots `±√u_0` live in a field of degree 10.
+
+### 4.4 Implementation (chunk 2)
+
+`src/flanpy/_field.py`, tests in `tests/test_field.py` (both backends).
+
+- **`Q[x]` arithmetic**: a small adapter `_QQx` in `_field.py` (`fmpq_poly`, `xgcd`,
+  `fmpq_mat.charpoly` under flint; SymPy sparse `QQ[x]`, `gcdex`, `DomainMatrix.charpoly`
+  otherwise), selected by `_rings.backend()`. It is not added to `_rings`: that module
+  builds the scalar rings of the series recurrences (`_Ring`: zero, one, conversions), and
+  division, extended gcd and characteristic polynomials do not fit that record.
+- **`to_real`**: the characteristic polynomial of the multiplication by `x` on `Q(θ)` is
+  `m_x^{[Q(θ):Q(x)]}`, so its squarefree part is `m_x`, with no factorisation over `Q`.
+  The root is identified by refining the enclosure of `x` only (the pitfall).
+- **Equality across fields** (`_Element.__eq__`): by `to_real` (canonical minimal
+  polynomial and index), cached per element. A common field `Q(θ_1, θ_2)` would need a
+  primitive element (a Trager norm of degree up to `d_1 d_2`) per comparison; `to_real`
+  costs one characteristic polynomial of degree `d`. Hashing uses `to_real` too, so it
+  agrees with `==`. Order across fields refines both enclosures (distinct reals).
+- **`real_roots`**: Yun over `K`, then Trager per squarefree part, as in Section 4.2;
+  a linear factor over `K` (rational roots, `0`, roots already in `K`) keeps `L = K`;
+  over `K = Q` the roots are isolated directly. Results ascend, with multiplicities.
+- **Timings** (Apple M1, cold, roots plus `to_real` plus one inverse): `c^10 − c^2 − 1`
+  over `Q` 0.004 s (flint) / 0.006 s (pure Python); `c^10 − √2 c^2 − 1` over `Q(√2)`
+  0.039 s / 0.047 s.
+- **References**: Trager 1976 and Loos 1983 are cited in the private docstrings only.
+  Their `docs/refs.bib` entries come with the first docs page that cites them (chunk 3
+  guide), DOIs checked then.
 
 ## 5. The leading constant, how many terms, and the line with step 6
 
