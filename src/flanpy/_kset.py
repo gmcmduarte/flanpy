@@ -18,6 +18,8 @@ from typing import Any, Literal, NoReturn, SupportsIndex
 
 import sympy as sp
 
+from flanpy._doctests import method_doctests
+
 __all__ = ["KCases", "KSet"]
 
 Relation = Literal["==", "!=", "<", "<=", ">", ">="]
@@ -848,6 +850,5 @@ class KCases[T]:
 KCases.__module__ = "flanpy"
 
 
-# The public classes report "flanpy" as their module, so the doctest finder would
-# skip them; list them here so that pytest --doctest-modules runs their examples.
-__test__ = {"KSet": KSet, "KCases": KCases}
+# Methods of the public classes, which __init__.py's doctests miss (_doctests.py).
+__test__ = method_doctests(KSet, KCases)

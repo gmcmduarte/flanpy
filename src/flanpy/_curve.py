@@ -18,6 +18,7 @@ from typing import Any, NoReturn
 
 import sympy as sp
 
+from flanpy._doctests import method_doctests
 from flanpy._kset import KSet
 from flanpy._series import series, series_in_k
 from flanpy._system import System, ZeroCoordinateWarning
@@ -461,5 +462,5 @@ def _select_factor(factors: Sequence[Any], system: System, w: Any) -> Any:
     return passing[0]
 
 
-# Curve reports "flanpy" as its module; list it so that pytest runs its examples.
-__test__ = {"Curve": Curve}
+# Methods of the public classes, which __init__.py's doctests miss (_doctests.py).
+__test__ = method_doctests(Curve)

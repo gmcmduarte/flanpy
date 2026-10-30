@@ -85,6 +85,7 @@ src/flanpy/
                  the exact factor selection; re-exported from flanpy
   _elimination.py  eliminate / eliminate_in_k, resultants, Groebner backend protocol
                  (SymPy only), exceptional k (design: dev/design/elimination.md)
+  _doctests.py   method_doctests: methods of public classes for a module's __test__
   symbolic/      grammar -> equations, bivariate cost series (d/du at u=1)
   singularity/   m_rho, m_a, Case I/II, dominant-singularity checks
   newton/        Newton polygon, Newton-Puiseux
@@ -128,6 +129,7 @@ These are the ground truth; the package is not "done" for a feature until its te
 - **Small, tested steps.** One module at a time, with its acceptance test from the list above.
 - **Commit hygiene**: clear messages, one logical change per commit, no generated artifacts or large data files in the repo.
 - **CI after every push**: check CI (`gh pr checks`) after every push, and only report when it is green or the failure is explained.
+- **Never merge PRs**: stop when CI is green and the PR is ready for review; Guilherme merges.
 - **Reports**: compact, at most ~40 lines, one line per item, point to design notes instead of repeating them, full detail only for PROBLEMS and QUESTIONS.
 
 ## Tooling
@@ -137,7 +139,7 @@ All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` l
 - **Extras**: `fast` (python-flint), `dev` (pytest, hypothesis, ruff, mypy, numpydoc, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, jupytext, sphinxcontrib-bibtex).
 - **Types**: `mypy --strict` (chosen over pyright: Python-native, no Node dependency). Tests are type-checked but may omit annotations.
 - **Lint/format**: `ruff` with pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, RUF and pydocstyle (NumPy convention). `dev/spikes/` is excluded (throwaway code).
-- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors. Tests marked `slow` (N = 1000) are deselected by default (`-m "not slow"` in `addopts`); run them with `pytest -m slow`. Test helpers (e.g. `tests/_enumerate.py`, the brute-force enumerator for Broda 2020) are importable because `tests` is on pytest's `pythonpath`. Property-based tests use `hypothesis` with a derandomized profile (`tests/conftest.py`). Doctests of a private module import its names from that module, not from `flanpy`: when pytest (importlib mode) collects a module alone, it executes it a second time, and the re-exported classes then differ. Public classes set `__module__ = "flanpy"`, which makes doctest's finder skip them, so each private module lists them in `__test__`.
+- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors. Tests marked `slow` (N = 1000) are deselected by default (`-m "not slow"` in `addopts`); run them with `pytest -m slow`. Test helpers (e.g. `tests/_enumerate.py`, the brute-force enumerator for Broda 2020) are importable because `tests` is on pytest's `pythonpath`. Property-based tests use `hypothesis` with a derandomized profile (`tests/conftest.py`). Doctests of a private module import its names from that module, not from `flanpy`: when pytest (importlib mode) collects a module alone, it executes it a second time, and the re-exported classes then differ. Public classes set `__module__ = "flanpy"`. pytest then collects their class docstrings and properties through `src/flanpy/__init__.py`. It misses their methods: doctest matches a function to the module whose dict is its `__globals__` (the private module), where the class is skipped. So each private module sets `__test__ = method_doctests(<classes>)` (`_doctests.py`). That lists only the functions, classmethods and staticmethods, so no docstring runs twice. To check, compare `pytest --collect-only -q src` before and after a change: no item may be lost.
 - **SPDX**: every `.py` file starts with `# SPDX-License-Identifier: GPL-3.0-or-later`.
 - **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 with the `fast` extra (flint backend) and on `3.x` without it (pure-Python backend; each job checks which backend it got), a `Slow tests` job (`pytest -m slow`, both entries) on every push and PR, plus a docs job (`sphinx-build -W` for HTML, executing the MyST-NB examples, then the `doctest` builder). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
 - **Repo files**: `README.md`, `CITATION.cff`, `CONTRIBUTING.md`, `docs/refs.bib` (DOIs checked against Crossref; arXiv-only entries against the arXiv API).
