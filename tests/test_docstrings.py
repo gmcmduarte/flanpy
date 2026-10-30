@@ -30,7 +30,8 @@ def public_members() -> list[str]:
         if inspect.isclass(obj) and not issubclass(obj, BaseException):
             for member, value in vars(obj).items():
                 if not member.startswith("_") and (
-                    isinstance(value, property) or inspect.isfunction(value)
+                    isinstance(value, property | classmethod | staticmethod)
+                    or inspect.isfunction(value)
                 ):
                     names.append(f"flanpy.{name}.{member}")
     return names

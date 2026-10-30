@@ -7,9 +7,10 @@ of the coefficients of an algebraic generating function, possibly for a family
 indexed by the alphabet size $k$.
 
 ```{warning}
-flanpy is pre-alpha. Only the input type {class}`flanpy.System` and its
+flanpy is pre-alpha. Only the input type {class}`flanpy.System`, its
 power-series coefficients ({func}`flanpy.series`, {func}`flanpy.series_in_k`)
-are implemented so far, and the public API is not stable.
+and sets of alphabet sizes ({class}`flanpy.KSet`) are implemented so far, and
+the public API is not stable.
 ```
 
 ## Pipeline
@@ -37,6 +38,7 @@ The methods follow {cite:t}`broda-2020-sigact` and
 :maxdepth: 1
 
 guide/system
+guide/kset
 ```
 
 ## Running examples
@@ -77,6 +79,9 @@ $ pip install flanpy
 .. autofunction:: flanpy.series
 
 .. autofunction:: flanpy.series_in_k
+
+.. autoclass:: flanpy.KSet
+   :members: where, of, all, intervals, tail_start, is_finite, finite_part, isdisjoint
 ```
 
 Well-posedness of a {class}`~flanpy.System` follows
