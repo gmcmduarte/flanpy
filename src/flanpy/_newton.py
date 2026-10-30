@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """The local expansion of the branch at its dominant singularity (build-order step 5).
 
-The design is recorded in ``dev/design/newton.md``. :class:`LocalExpansion` and
-:func:`local_expansion` are public (fixed ``k``; symbolic ``k`` comes in chunk 4).
+The design is recorded in ``dev/design/newton.md``. :class:`LocalExpansion`,
+:func:`local_expansion` (a fixed ``k``) and :func:`local_expansion_in_k` (symbolic
+``k``, piece by piece) are public.
 
 References: Flajolet and Sedgewick, *Analytic Combinatorics* (2009), "FS";
 Broda, Machiavelo, Moreira and Reis (2020), "Broda"; Pivoteau and Salvy, *Effective
@@ -35,10 +36,19 @@ from flanpy._field import (
     _NumberField,
     _trim,
 )
-from flanpy._kset import KSet
-from flanpy._singularity import Case, Singularity, _Window, _window_of
+from flanpy._kset import KCases, KSet
+from flanpy._singularity import (
+    Case,
+    Singularity,
+    _constant_root,
+    _Family,
+    _holds,
+    _layout,
+    _Window,
+    _window_of,
+)
 
-__all__ = ["LocalExpansion", "local_expansion"]
+__all__ = ["LocalExpansion", "local_expansion", "local_expansion_in_k"]
 
 # Private hook (newton.md, section 2.2): which rule decided each hull entry of the
 # top-level Newton polygon. Keys: "zero polynomial", "remainder mod m_rho",
@@ -69,7 +79,10 @@ class LocalExpansion[X: (AlgebraicReal, KRoot)]:
     - Case II: ``1/w = c s^α + ...``, so ``w = (1/c) s^{-α} + ...``.
 
     Fields: :attr:`alpha`, :attr:`ramification` (``κ``), :attr:`b` (Case I) or
-    :attr:`c` (Case II), exact; :meth:`terms` gives the coefficients ``d_n``.
+    :attr:`c` (Case II), exact; :meth:`terms` gives the coefficients ``d_n``. At a
+    fixed ``k`` the constants are :class:`~flanpy.AlgebraicReal`; on a piece of
+    :func:`local_expansion_in_k` they are :class:`~flanpy.KRoot` relative to
+    ``ρ_k``, and :meth:`specialize` gives the fixed-``k`` expansion.
 
     Notes
     -----
@@ -298,8 +311,10 @@ class LocalExpansion[X: (AlgebraicReal, KRoot)]:
             raise TypeError(f"n must be an int, got {n!r}")
         if n < 0:
             raise ValueError(f"n must be >= 0, got {n}")
-        if self._singularity.k is not None:  # pragma: no cover - chunk 4
-            raise ValueError("terms need a fixed k: use specialize(k)")
+        if self._singularity.k is not None:
+            raise ValueError(
+                "terms need a fixed k: use specialize(n) for the expansion at k = n"
+            )
         if len(self._terms) < n:
             if self._state is None:  # after unpickling
                 fixed = self._singularity
@@ -318,8 +333,9 @@ class LocalExpansion[X: (AlgebraicReal, KRoot)]:
     def specialize(self, k: int) -> LocalExpansion[AlgebraicReal]:
         """Return the expansion at a fixed ``k`` (for results on a piece of ``k``).
 
-        Pieces of ``k`` come with ``local_expansion_in_k`` (build-order step 5,
-        chunk 4); a fixed-``k`` expansion has nothing to specialize.
+        Equal to ``local_expansion(self.singularity, k=k)``; ``b`` and ``c``
+        become :class:`~flanpy.AlgebraicReal`, equal to ``self.b.at(k)``
+        (``self.c.at(k)``). A fixed-``k`` expansion has nothing to specialize.
 
         Parameters
         ----------
@@ -338,18 +354,26 @@ class LocalExpansion[X: (AlgebraicReal, KRoot)]:
 
         Examples
         --------
+        Broda et al. (2020) ``R_k``: ``b_2 = √(2 - 2ρ_2)/(4ρ_2)`` (section 3.1).
+
         >>> from sympy import symbols
-        >>> from flanpy import System, eliminate, local_expansion, singularity
-        >>> z, F = symbols("z F")
-        >>> s = singularity(eliminate(System({F: 1 + z * F**2}, z=z), F))
-        >>> local_expansion(s).specialize(2)
+        >>> from flanpy import System, eliminate_in_k, local_expansion_in_k
+        >>> from flanpy import singularity_in_k
+        >>> z, k, R = symbols("z k R")
+        >>> rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
+        >>> e = local_expansion_in_k(singularity_in_k(eliminate_in_k(rk, R)))[2]
+        >>> e.specialize(2).b
+        AlgebraicReal(8*y**4 - 48*y**2 + 69, 3)
+        >>> e.specialize(2).b == e.b.at(2)
+        True
+        >>> e.specialize(2).specialize(2)
         Traceback (most recent call last):
             ...
         ValueError: the expansion is at a fixed k: nothing to specialize
         """
         if self._singularity.k is None:
             raise ValueError("the expansion is at a fixed k: nothing to specialize")
-        return local_expansion(self._singularity, k=k)  # pragma: no cover - chunk 4
+        return local_expansion(self._singularity, k=k)
 
     # -- value semantics -----------------------------------------------------------
 
@@ -563,7 +587,7 @@ def _analyse(
     problem = _LocalProblem.build(g, rho, case, s.a)
     branches = problem.branches()
     chosen = _choose(branches, window, g, case)
-    state = _State(problem, chosen)
+    state = _State(problem, chosen, branches)
     if case == "I":
         alpha, b = state.case_one_constant()
         if b <= 0:  # pragma: no cover - proved, newton.md section 3.2
@@ -1102,9 +1126,12 @@ def _select(branches: list[_Branch], case: Case, n_w: int, rank: int) -> _Branch
 class _State:
     """The chosen branch and the field data needed for :meth:`LocalExpansion.terms`."""
 
-    def __init__(self, problem: _LocalProblem, branch: _Branch) -> None:
+    def __init__(
+        self, problem: _LocalProblem, branch: _Branch, branches: list[_Branch]
+    ) -> None:
         self.problem = problem
         self.branch = branch
+        self.branches = branches  # all the real branches at the point
         self._inverse: list[_Element] = []
 
     def case_one_constant(self) -> tuple[Fraction, AlgebraicReal]:
@@ -1138,6 +1165,357 @@ class _State:
                 total = total + germ.coefficient(n0 + i) / lead * inv[k - i]
             inv.append(-total)
         return [x / lead for x in inv[:n]]
+
+
+# -- symbolic k (newton.md, section 6) -----------------------------------------------
+
+
+def local_expansion_in_k(
+    singularities: Singularity[Any] | KCases[Singularity[Any]],
+) -> KCases[LocalExpansion[Any]]:
+    """Return the local expansion for symbolic ``k``, piece by piece.
+
+    On each piece of :func:`~flanpy.singularity_in_k`, the exponent ``α``, the
+    ramification ``κ`` and the edge of the Newton polygon that carries ``w`` are
+    constant, and the constant ``b_k`` (Case I) or ``c_k`` (Case II) is a
+    :class:`~flanpy.KRoot` *relative to* ``ρ_k``: the ``j``-th positive root of a
+    polynomial ``Φ(y, ρ_k, k)`` (``over=ρ_k``; newton.md, section 6.1). In Case I,
+    ``a_k = A(ρ_k)`` with ``A = -s_10/s_11`` from the first subresultant
+    ``s_11 w + s_10`` of ``G`` and ``∂G/∂w``. The pieces come from the real roots of
+    a finite set of polynomials in ``k`` (the cut set; Notes), one exact
+    fixed-``k`` analysis (:func:`local_expansion`) per interval between them and
+    one at each integer root; pieces with the same description are merged.
+
+    Parameters
+    ----------
+    singularities : Singularity or KCases[Singularity]
+        A piece of :func:`~flanpy.singularity_in_k`, or its whole result (handled
+        piece by piece with :meth:`KCases.flat_map <flanpy.KCases.flat_map>`; a
+        piece at one fixed ``k`` gets :func:`local_expansion`).
+
+    Returns
+    -------
+    KCases[LocalExpansion]
+        Pieces covering the ``kset`` of every input piece; nothing is dropped.
+
+    Raises
+    ------
+    TypeError
+        If the input is not a :class:`~flanpy.Singularity` or a ``KCases`` of them.
+    ValueError
+        If a singularity has no parameter ``k`` (use :func:`local_expansion`).
+    NotImplementedError
+        On a piece where ``a_k`` is not a rational function of ``ρ_k`` (no first
+        subresultant of degree 1, or it vanishes at ``ρ_k``), or where the branch
+        of ``w`` shares its first term with another real branch (a tie at the
+        first level). The message names the piece; :func:`local_expansion` with
+        ``k=n`` works at each fixed ``k``.
+
+    See Also
+    --------
+    local_expansion : one fixed ``k``.
+    LocalExpansion.specialize : the result of a piece at one ``k``.
+
+    Notes
+    -----
+    **The cut set** (newton.md, section 6.2). On a piece where ``ρ_k = KRoot(f, j)``:
+    step 4's projection set ``P1 ∪ P2(f)`` (Notes of
+    :func:`~flanpy.singularity_in_k`), and ``P5``: in Case I ``Res_z(f, s_11)`` and
+    ``Res_z(f, lc_w G)``; ``Res_z(f, q_ij)`` for the points ``(j, i)`` of the
+    generic lower hull (the lowest point of every column ``j <= r``, vertices and
+    points on edges), where ``q_ij(z, k)`` are the coefficients of
+    ``s_11^m G(z(1 - s), A + Y)`` (Case I) or ``H(z(1 - s), Y)`` (Case II) at
+    ``z = ρ_k``; and ``Res_z(f, disc_y Φ_E)`` for every edge ``E``. An entry is
+    *generically zero* when ``f`` divides it over ``Q(k)``
+    (``Res_z(f, q_ij) ≡ 0``), and the generic polygon is built from the others.
+
+    **Proposition.** On an open interval ``I`` inside a step 4 piece on which no
+    polynomial of the cut set vanishes, ``α``, ``κ``, the edge of ``w``, and the
+    index ``j`` of its constant among the positive roots of ``Φ(·, ρ_k, k)`` are
+    constant.
+
+    *Proof.* (1) Step 4's proposition holds on ``I``: ``ρ_k`` and ``a_k`` are
+    continuous and simple, and the case is constant. ``s_11(ρ_k) != 0`` and
+    ``lc_w G(ρ_k) != 0``, so ``gcd(G(ρ_k, ·), G_w(ρ_k, ·))`` is the first
+    subresultant at ``ρ_k``, of degree 1, and ``a_k = A(ρ_k)``. (2) Every hull
+    entry ``q_ij(ρ_k, k)`` is continuous and non-zero on ``I``; the generically zero
+    entries vanish identically. So the polygon, ``r``, the edges, ``α`` and ``κ``
+    are constant. (3) The roots of each ``Φ_E(·, ρ_k, k)`` are continuous, simple
+    and non-zero (``disc``; the end coefficients are hull entries), so the real
+    branches keep their signs and their order as ``s → 0⁺`` (by exponent, then by
+    the leading coefficient). (4) The rank of ``w`` among the real sheets of its
+    window is locally constant: at ``k0 ∈ I`` take step 4's ``x0`` and a window
+    ``(q_l, q_r)`` around ``a_{k0}`` (or the top window); by (1) and the window
+    argument of :func:`~flanpy.singularity_in_k` (item 5), ``x0`` and the
+    separators work near ``k0``, ``w(x0, k)`` is continuous, and the roots of
+    ``G(x0, ·, k)`` stay simple; in Case I the multiplicity of ``a_k`` as a root
+    of ``G(ρ_k, ·, k)`` stays ``r`` (``q_{0r} != 0``, ``q_{0j} ≡ 0`` for ``j < r``),
+    so the window still holds no other root. Hence the rank test selects, for
+    every ``k ∈ I``, the branch with the same position in the same order, on the
+    same edge: its leading coefficient is the same root of ``Φ_E``, continuous in
+    ``k``. (5) It is positive (the sign rule; ``-c`` in Case I), and the positive
+    roots of ``Φ(·, ρ_k, k)`` are distinct and continuous, so its index ``j`` among
+    them is constant. ∎
+
+    Every integer root of the cut set in the piece is instantiated
+    (:func:`local_expansion` at ``k = n``); it joins a description that holds
+    exactly at ``n`` (``KRoot.at(n)`` equal to the constant at ``n``, the same
+    ``α`` and ``κ``), or keeps its own, with the constant's minimal polynomial.
+
+    Examples
+    --------
+    Broda et al. (2020) ``R_k``: one piece, ``α = 1/2``, and
+    ``b_k = √(2 - 2ρ_k)/(4ρ_k)`` (section 3.1), the positive root of
+    ``16ρ_k^2 y^2 - (2 - 2ρ_k)``:
+
+    >>> from sympy import symbols
+    >>> from flanpy import System, eliminate_in_k, local_expansion_in_k
+    >>> from flanpy import singularity_in_k
+    >>> z, k, R = symbols("z k R")
+    >>> rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
+    >>> cases = local_expansion_in_k(singularity_in_k(eliminate_in_k(rk, R)))
+    >>> ((piece, e),) = cases.pieces
+    >>> print(piece, e.alpha, e.ramification)
+    [1, ∞) 1/2 2
+    >>> e.b.at(2) == e.specialize(2).b
+    True
+    """
+    if isinstance(singularities, KCases):
+        return KCases(
+            (part, _restricted(e, part))
+            for part, e in singularities.flat_map(_expansion_in_k).pieces
+        )
+    if not isinstance(singularities, Singularity):
+        raise TypeError(
+            "expected a flanpy.Singularity or KCases of them, got "
+            f"{type(singularities).__name__}"
+        )
+    return _expansion_in_k(singularities)
+
+
+def _restricted(e: LocalExpansion[Any], part: KSet) -> LocalExpansion[Any]:
+    """``e`` with its singularity restricted to ``part``."""
+    s = e.singularity
+    if s.kset == part:
+        return e
+    t = Singularity._make(s.curve, s.rho, s.case, s.a, s.period, s.unique, part)
+    return LocalExpansion._make(t, e.alpha, e.ramification, e.b, e.c, None)
+
+
+def _expansion_in_k(s: object) -> KCases[LocalExpansion[Any]]:
+    if not isinstance(s, Singularity):
+        raise TypeError(f"expected a flanpy.Singularity, got {type(s).__name__}")
+    if s.k is None:
+        if s.kset == KSet.all():
+            raise ValueError(
+                "the singularity has no parameter k; use flanpy.local_expansion"
+            )
+        return KCases({s.kset: local_expansion(s)})  # a piece at one fixed k
+    return _FamilyExpansion(s).run()
+
+
+def _reduce(phi: sp.Expr, y: sp.Symbol, f: sp.Poly) -> sp.Expr:
+    """Return ``Φ`` with the same roots at ``z = ρ_k``, reduced modulo ``f``.
+
+    The content of ``Φ`` in ``(z, k)`` is removed, every coefficient (in ``y``) is
+    reduced modulo ``f`` over ``Q(k)``, and the denominators (powers of factors of
+    ``lc_z f``, non-zero on the pieces: ``lc_z f`` divides a polynomial of ``P1``)
+    and the content are cleared again. At ``z = ρ_k`` this multiplies ``Φ`` by a
+    non-zero factor wherever the description is valid (an instantiated ``k`` is
+    checked exactly).
+    """
+    z, k = f.gens
+    poly = sp.Poly(phi, y, domain=sp.QQ[z, k])
+    _, poly = poly.primitive()
+    field = sp.QQ.frac_field(k)
+    fz = sp.Poly(f.as_expr(), z, domain=field)
+    reduced = [
+        sp.Poly(c.as_expr(), z, domain=field).rem(fz).as_expr()
+        for c in poly.all_coeffs()
+    ]
+    total = sp.together(
+        sum(c * y ** (len(reduced) - 1 - i) for i, c in enumerate(reduced))
+    )
+    numerator, _ = sp.fraction(total)
+    _, primitive = sp.Poly(numerator, y, domain=sp.QQ[z, k]).primitive()
+    return sp.expand(primitive.as_expr())
+
+
+@dataclass(frozen=True)
+class _Description:
+    """What is constant on a piece (newton.md, section 6.1)."""
+
+    alpha: Fraction
+    kappa: int
+    constant: KRoot  # b_k (Case I) or c_k (Case II)
+
+
+class _FamilyExpansion:
+    """The local expansion on one piece of ``singularity_in_k`` (section 6)."""
+
+    def __init__(self, s: Singularity[Any]) -> None:
+        self.s = s
+        curve = s.curve
+        self.w, self.z, self.k = curve.w, curve.z, curve.k
+        self.g = curve.polynomial.as_expr()
+        self.piece = s.kset
+        self._samples: dict[int, tuple[LocalExpansion[AlgebraicReal], _State]] = {}
+        self.extra: list[Any] = []  # Case I: Res_z(f, s_11), Res_z(f, lc_w G)
+        self.multiple: set[Fraction] = set()  # slopes with a generic multiple root
+
+    def _gap(self, reason: str) -> NotImplementedError:
+        return NotImplementedError(
+            f"local_expansion_in_k: for k in {self.piece}, {reason}; "
+            "local_expansion(singularity, k=n) works at each fixed k"
+        )
+
+    def sample(self, n: int) -> tuple[LocalExpansion[AlgebraicReal], _State]:
+        if n not in self._samples:
+            self._samples[n] = _analyse(self.s.specialize(n))
+        return self._samples[n]
+
+    # -- the generic local problem -------------------------------------------------
+
+    def _local_polynomial(self) -> sp.Poly:
+        """Return ``s_11^m G(z(1 - s), A + Y)`` (I) or ``H(z(1 - s), Y)`` (II)."""
+        w, z = self.w, self.z
+        s_, y_ = self._s, self._y
+        g = sp.Poly(self.g, w)
+        m = g.degree()
+        shifted = {d: c.subs(z, z * (1 - s_)) for (d,), c in g.terms()}
+        if self.s.case == "II":
+            total = sum(c * y_ ** (m - d) for d, c in shifted.items())
+            return sp.Poly(sp.expand(total), s_, y_)
+        f = self.f.as_expr()
+        derivative = sp.Poly(sp.diff(self.g, w), w)
+        first = [p for p in sp.subresultants(g, derivative) if p.degree() == 1]
+        if not first:
+            raise self._gap("G and dG/dw have no first subresultant of degree 1")
+        s11, s10 = (sp.expand(c) for c in first[-1].all_coeffs())
+        self.extra = [sp.resultant(f, s11, z), sp.resultant(f, g.LC(), z)]
+        if any(sp.expand(r) == 0 for r in self.extra):
+            raise self._gap("a_k is not a rational function of ρ_k (s_11 or lc_w G)")
+        numerator = -s10 + s11 * y_  # A + Y = numerator / s_11
+        total = sum(c * numerator**d * s11 ** (m - d) for d, c in shifted.items())
+        return sp.Poly(sp.expand(total), s_, y_)
+
+    def _generic(self, i: int, j: int) -> bool:
+        """Whether ``q_ij`` is generically non-zero (``f`` does not divide it)."""
+        if (i, j) not in self._cache:
+            q = self.local.coeff_monomial(self._s**i * self._y**j)
+            if q == 0:
+                self._cache[(i, j)] = None
+            else:
+                r = (
+                    sp.expand(sp.resultant(self.f.as_expr(), q, self.z))
+                    if q.has(self.z)
+                    else sp.expand(q)
+                )
+                self._cache[(i, j)] = None if r == 0 else r
+        return self._cache[(i, j)] is not None
+
+    def _setup(self) -> None:
+        self._s, self._y = sp.Dummy("s"), sp.Dummy("y")
+        self.f = self.s.rho.polynomial
+        self.local = self._local_polynomial()
+        self._cache: dict[tuple[int, int], Any] = {}
+        max_i = self.local.degree(self._s)
+        _, self.lowest = _polygon(self._generic, max_i)
+        self.edges = _edges(self.lowest)
+        family = _Family(self.s.curve)
+        polys: list[Any] = [*family.first, *family.second(self.f).polys, *self.extra]
+        polys += [self._cache[(i, j)] for j, i in self.lowest.items()]
+        self.phis: dict[Fraction, sp.Expr] = {}
+        for j1, i1, j2, i2 in self.edges:
+            gamma = Fraction(i1 - i2, j2 - j1)
+            phi = sum(
+                self.local.coeff_monomial(self._s**i * self._y**j) * self._y ** (j - j1)
+                for j, i in self.lowest.items()
+                if j1 <= j <= j2 and (i1 - i) * (j2 - j1) == (i1 - i2) * (j - j1)
+            )
+            self.phis[gamma] = phi
+            if j2 - j1 > 1:
+                disc = sp.discriminant(phi, self._y)
+                r = sp.expand(sp.resultant(self.f.as_expr(), disc, self.z))
+                if r != 0:
+                    polys.append(r)
+                else:
+                    self.multiple.add(gamma)
+        self.polys = [p for p in polys if p is not None]
+
+    # -- descriptions ----------------------------------------------------------------
+
+    def describe(self, n: int) -> _Description:
+        """Return the description at a sample ``n`` of an open interval (6.1)."""
+        e, state = self.sample(n)
+        chosen = state.branch
+        ties = [
+            b
+            for b in state.branches
+            if b is not chosen
+            and b.gamma == chosen.gamma
+            and b.leading == chosen.leading
+        ]
+        if ties or chosen.gamma in self.multiple:
+            raise self._gap("the branch of w ties with another at the first level")
+        if chosen.gamma not in self.phis:  # pragma: no cover - same polygon at n
+            raise RuntimeError(f"no generic edge of slope {chosen.gamma} at k = {n}")
+        y_ = self._y
+        phi = self.phis[chosen.gamma]
+        if self.s.case == "I":
+            phi = phi.subs(y_, -y_)
+        value = e.b if e.b is not None else e.c
+        assert value is not None
+        y = sp.Symbol("y")
+        polynomial = _reduce(sp.expand(phi.subs(y_, y)), y, self.f)
+        for j in range(sp.Poly(polynomial, y).degree()):
+            candidate = KRoot(polynomial, j, k=self.k, over=self.s.rho)
+            if _holds(candidate, n, value):
+                return _Description(e.alpha, e.ramification, candidate)
+        raise RuntimeError(  # pragma: no cover - the constant is a root of Φ
+            f"the constant {value} is no positive root of Φ at k = {n}"
+        )
+
+    def exceptional(self, n: int, known: list[_Description]) -> _Description:
+        """Return the description at an integer cut ``n`` (a known one if it holds)."""
+        e, _ = self.sample(n)
+        value = e.b if e.b is not None else e.c
+        assert value is not None
+        for d in known:
+            if (d.alpha, d.kappa) == (e.alpha, e.ramification) and _holds(
+                d.constant, n, value
+            ):
+                return d
+        return _Description(e.alpha, e.ramification, _constant_root(value, self.k))
+
+    def run(self) -> KCases[LocalExpansion[KRoot]]:
+        piece = self.piece
+        intervals: list[tuple[KSet, _Description]] = []
+        points: set[int] = set()
+        if piece.is_finite:
+            points = set(piece)
+        else:
+            self._setup()
+            roots, spans = _layout(self.polys, self.k)
+            points = {n for n in roots if n in piece}
+            for span in spans:
+                part = KSet([span]) & piece
+                if part:
+                    intervals.append((part, self.describe(part.intervals[0][0])))
+        known = list(dict.fromkeys(d for _, d in intervals))
+        pieces = intervals + [
+            (KSet.of(n), self.exceptional(n, known)) for n in sorted(points)
+        ]
+        merged: dict[_Description, KSet] = {}
+        for part, d in pieces:
+            merged[d] = merged.get(d, KSet()) | part
+        s, case = self.s, self.s.case
+        out = []
+        for d, part in merged.items():
+            t = Singularity._make(s.curve, s.rho, case, s.a, s.period, s.unique, part)
+            b, c = (d.constant, None) if case == "I" else (None, d.constant)
+            out.append((part, LocalExpansion._make(t, d.alpha, d.kappa, b, c, None)))
+        return KCases(out)
 
 
 __test__ = method_doctests(LocalExpansion)

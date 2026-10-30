@@ -13,7 +13,8 @@ coefficients (:func:`series`, :func:`series_in_k`), sets of alphabet sizes
 (:func:`eliminate`, :func:`eliminate_in_k`), exact real algebraic numbers
 (:class:`AlgebraicReal`), the dominant singularity, at a fixed ``k``
 (:func:`singularity`) and for symbolic ``k`` (:func:`singularity_in_k`,
-:class:`KRoot`), and the local expansion at a fixed ``k`` (:func:`local_expansion`).
+:class:`KRoot`), and the local expansion at the singularity, at a fixed ``k``
+(:func:`local_expansion`) and for symbolic ``k`` (:func:`local_expansion_in_k`).
 
 Examples
 --------
@@ -29,7 +30,7 @@ from flanpy._algebraic import AlgebraicReal, KRoot
 from flanpy._curve import Curve
 from flanpy._elimination import eliminate, eliminate_in_k
 from flanpy._kset import KCases, KSet
-from flanpy._newton import LocalExpansion, local_expansion
+from flanpy._newton import LocalExpansion, local_expansion, local_expansion_in_k
 from flanpy._series import series, series_in_k
 from flanpy._singularity import (
     Singularity,
@@ -67,6 +68,7 @@ __all__ = [
     "eliminate",
     "eliminate_in_k",
     "local_expansion",
+    "local_expansion_in_k",
     "series",
     "series_in_k",
     "singularity",
