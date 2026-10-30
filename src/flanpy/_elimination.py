@@ -222,12 +222,10 @@ def eliminate_in_k(
     irreducibility theorem), but those ``n`` are not computed; use
     :meth:`Curve.specialize` to certify a given ``n``.
 
-    References
-    ----------
-    .. [1] P. Gianni, "Properties of Gröbner bases under specializations", EUROCAL
-       '87, LNCS 378, Springer (1989) 293-297.
-    .. [2] M. Kalkbrener, "On the stability of Gröbner bases under
-       specializations", *J. Symbolic Comput.* 24(1) (1997) 51-58.
+    Sources: P. Gianni, "Properties of Gröbner bases under specializations",
+    EUROCAL '87, LNCS 378, Springer (1989) 293-297; M. Kalkbrener, "On the stability
+    of Gröbner bases under specializations", *J. Symbolic Comput.* 24(1) (1997)
+    51-58.
 
     Examples
     --------
