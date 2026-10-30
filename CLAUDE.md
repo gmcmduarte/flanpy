@@ -2,7 +2,7 @@
 
 Open-source Python package implementing the analytic-combinatorics toolchain used by our research group (Broda, Machiavelo, Moreira, Reis, and Guilherme), so that papers can ship a runnable script that reproduces their results, instead of Mathematica files.
 
-This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`), 2 (`KSet`) and 3 (`elimination`) are implemented; the later steps are not. Update this file when decisions change.
+This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`), 2 (`KSet`), 3 (`elimination`) and 4 (`singularity`) are implemented; the later steps are not. Update this file when decisions change.
 
 ## What the package does
 
@@ -72,6 +72,17 @@ Reference papers (in Guilherme's Zotero library):
 - **Documented gap**: on the generic piece, irreducibility of `G(·, ·, n)` is not certified (finitely many failures, Noether 1922). `Curve.specialize(n)` certifies one `n`. There is no gap when `deg_w G = 1`.
 - **Backends**: private `_GroebnerBackend` protocol with the SymPy backend only; no public `backend=` until a second backend exists (Singular / Sage planned; Sage is installed on the maintainer's machine).
 
+### Step 4: `singularity` (design note: `dev/design/singularity.md`)
+
+- **Public API**: `flanpy.AlgebraicReal(polynomial, index)` (minimal polynomial over `Q` + index among the real roots, normalised silently; exact `==`, `<`, `sign`, `evalf`, `as_expr`); `flanpy.KRoot(polynomial, positive_index, *, k)` (the `positive_index`-th **positive** root of `f(x, k)`, `f` irreducible over `Q(k)`; `at(n)` exact; not `index`, which counts real roots); `flanpy.singularity(curve, *, k=None) -> Singularity[AlgebraicReal]`; `flanpy.singularity_in_k(Curve | KCases[Curve]) -> KCases[Singularity]` (pieces cover each input curve's `kset`; `KCases.flat_map` for a `KCases` input); `flanpy.Singularity` (generic in its root type: `curve`, `rho`, `case` `"I"`/`"II"`, `a` (`None` in Case II), `period`, `unique` (`True`/`False`/`None`), `k`, `kset`, `specialize(n)`); `UndecidedSingularityError` (a `ValueError`), `SingularityWarning`. `m_ρ`, `m_a` are `rho.polynomial`, `a.polynomial`.
+- **Scope**: non-negative closures only (the unknowns `w` depends on; `k = 1 + t` test for symbolic `k`, sufficient, not necessary); a signed closure raises `UndecidedSingularityError` listing the candidates. A polynomial series raises `ValueError`.
+- **`ρ`**: Pringsheim (FS Thm IV.6); candidates = roots of `lc_w G · disc_w G` (FS Lemma VII.4); a candidate need not be a singularity (`L_k`: the positive root of `q_k` lies below `ρ_k` for every `k`). `ρ` is located by binary search with **certified rational comparisons** on the closure: `q < ρ` via a rational super-solution `H(q, u) <= u`; `q > ρ` via a sound lower iterate (rounded-down Newton and Kleene steps, clamped) with `Λ(J) >= 1` (PS 2025 Prop. 3.11, Thm 4.1, Lemmas 3.5, 3.6, 6.7, B.5). Soundness and termination (with rounding) are in the Notes of `singularity`.
+- **Case I/II and `a`**: exact window test at a rational `x0 < ρ` (separators of the roots of `Res_z(m_ρ, G)`, certified enclosure of `w(x0)`); Case I gives `a` exactly, checked against Broda eq. (19).
+- **Uniqueness** (§5.3): `period > 1` -> `False` (PS §7.1 periods); exact circle test proves no other candidate on `|z| = ρ` -> `True`; closure irreducible and nonlinear -> `True` (PS Thm 6.3); otherwise `None` + `SingularityWarning`. Step 6 must refuse `unique != True`. **Open (later work)**: reducible closures with another candidate on the circle, e.g. `W = z^2 + T` (truth: `False`) and Broda `L_k`, `F_k` at `k = 108` (truth: unique, numerically; a Wielandt argument on the linear component, design note §5.4 and §6.4).
+- **Symbolic `k`**: on a piece, `ρ_k` = `KRoot(f, j)` with `f` a factor of the candidates, Case I `a_k` = `KRoot(g, j')` with `g` a factor of `Res_z(f, G)`; case, period, `unique` constant. Pieces come from the real roots `>= 1` of the **projection set** (`P1`, then `P2(f)` for the factor of `ρ_k`; §6.2), exact via `KSet`'s breakpoints; one sample per interval; every integer root instantiated; equal descriptions merged; nothing dropped. The proof (continuity of `ρ_k`, constancy of the case and `a_k`) is in the Notes of `singularity_in_k`.
+- **`L_k` result**: `ρ_k = KRoot(p_k, 0)`, Case II, period 1, for every `k >= 1`; `unique` on `[1, 107] ∪ [109, ∞)`, undecided at `{108}`, where `p_108 = 4(27z + 1)(972z^2 − 1)` puts `−ρ_108` on the circle. Cuts at 35.52 (`17 + 7√7`), 42.x, 54, 58.x, 108, 112.x, 146.x; `k = 54` is a cut and merges (`p_54 = 2(45z − 2)(18z + 1)^2`, `m_ρ = 45z − 2`). Times: `singularity_in_k(L_k)` 0.9 s after elimination; `L_k`, `k = 1..60`, fixed `k`, 9.6 s (flint).
+- **python-flint 0.9**: `fmpz_poly.complex_roots()` returns certified Arb balls (fast); `fmpz_poly.real_roots()` raises `NotImplementedError`, so exact real isolation stays with SymPy. Flint is at most an optional accelerator for the numerical step of the circle test (not used yet).
+
 ## Planned layout
 
 ```
@@ -88,10 +99,11 @@ src/flanpy/
   _doctests.py   method_doctests: methods of public classes for a module's __test__
   symbolic/      grammar -> equations, bivariate cost series (d/du at u=1)
   _algebraic.py  AlgebraicReal (exact real algebraic numbers: minimal polynomial + index,
-                 cached isolating interval), root isolation, the circle test; re-exported
-                 from flanpy (design: dev/design/singularity.md)
-  _singularity.py  (step 4, chunks 3-4) Singularity, singularity / singularity_in_k,
-                 KRoot: m_rho, m_a, Case I/II, dominant-singularity checks
+                 cached isolating interval), KRoot (a positive root of f(x, k)), root
+                 isolation, the circle test; re-exported from flanpy
+                 (design: dev/design/singularity.md)
+  _singularity.py  Singularity, singularity / singularity_in_k: certificates, window
+                 test (Case I/II, a), period, uniqueness, projection set in k
   newton/        Newton polygon, Newton-Puiseux
   transfer/      Thm 3.1 / 3.2, square-root case
   families/      expansions in 1/k
@@ -193,6 +205,9 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - [x] Build-order step 1 (`system` + `series`): done 2026-10-29 (PR #1).
 - [x] Build-order step 2 (`kset`): done 2026-10-30 (PR #4).
 - [x] Build-order step 3 (`elimination`): done 2026-10-30 (PR #5).
+- [x] Build-order step 4 (`singularity`): done 2026-10-30 (PR #6).
+- Broda 2020 §3.4 prints `res_w(G, ∂G/∂w)` as a rational function; it differs from the computed resultant `k^3 z^3 p_k^2 q_k^2`; the conclusion stands; to confirm with the authors (not an erratum). Also check how §3.4's uniqueness argument for `k > 54` treats `k = 108` (see Decisions, step 4).
+- Uniqueness for reducible closures (`L_k`, `F_k` at `k = 108`; `W = z^2 + T`): later work (design note §5.4).
 - Confirm the Broda 2020 eq. (5) erratum with the authors (see Decisions, step 1).
 - PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
 - Remaining technical risk: roots of characteristic polynomials that are not expressible in radicals (see Decisions), and Case I curves with larger systems, where the Groebner step may be slow. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.
