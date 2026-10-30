@@ -2,7 +2,7 @@
 
 Open-source Python package implementing the analytic-combinatorics toolchain used by our research group (Broda, Machiavelo, Moreira, Reis, and Guilherme), so that papers can ship a runnable script that reproduces their results, instead of Mathematica files.
 
-This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`), 2 (`KSet`), 3 (`elimination`) and 4 (`singularity`) are implemented; the later steps are not. Update this file when decisions change.
+This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`), 2 (`KSet`), 3 (`elimination`), 4 (`singularity`) and 5 (`newton`) are implemented; the later steps are not. Update this file when decisions change.
 
 ## What the package does
 
@@ -40,7 +40,7 @@ Reference papers (in Guilherme's Zotero library):
 - **Finding `alpha` and Puiseux expansions (validated by a spike, see `dev/spikes/np_spike.py`)**:
   - `alpha` needs no algebraic-number arithmetic. As in Broda 2020 (eqs. (21)-(27)), take the derivatives `d^i_z d^j_w G` at `(rho, a)`, decide which are non-zero with `gcd(derivative(z), m_rho(z))` over `Q(k)` (gcd = 1 -> non-zero; zero polynomial -> zero; otherwise inconclusive), then take the lower convex hull of the points `(j-1, i)`. Group support points by x and keep the minimum y before computing the hull. Reproduced `alpha = 1/2` for eq. (32).
   - Puiseux expansions in `1/k` (e.g. `rho_k`) use the standard Newton-polygon recursion: substitute `x = s^q`, `y = s^p (c + y1)`, solve the characteristic polynomial for `c`, recurse. With SymPy radicals this reproduced eq. (35) exactly (coefficients in `Q(sqrt 2)`) and `c_k ~ 4 k^(-1/2)` from eqs. (34)/(36).
-  - Not yet tested: characteristic polynomials whose roots are not expressible in radicals. Those need an explicit number-field representation (minimal polynomial + root isolation) instead of `sympy.roots`. Keep the coefficient field behind an interface so it can be swapped.
+  - Characteristic polynomials whose roots are not expressible in radicals: handled since step 5 by explicit real number fields `Q(θ)` (`_field.py`, behind the `_Field` protocol), not `sympy.roots`; see Step 5 below.
 - **Exactness**: `rho`, `a`, `alpha` are exact algebraic data (minimal polynomial + isolating interval). Floats (`mpmath`) are only for evaluation and for cross-checking.
 - **Rigor**: start with checks that emit warnings (e.g. uniqueness of the dominant singularity); certified proofs can come later.
 
@@ -83,9 +83,19 @@ Reference papers (in Guilherme's Zotero library):
 - **`L_k` result**: one piece `[1, ∞)`: `ρ_k = KRoot(p_k, 0)`, Case II, period 1, `unique`, for every `k >= 1` (same for `F_k`, Case I). At `k = 108`, `p_108 = 4(27z + 1)(972z^2 − 1)` puts `−ρ_108` on the circle; the component rule proves it regular (`{B, B̄}` nonlinear and `{M, M̄}` linear, both period 1; `{B, B̄}` is itself critical, `ρ_B = ρ_k`). Cuts at 35.52 (`17 + 7√7`), 42.x, 54, 58.x, 108, 112.x, 146.x; `k = 54` is a cut and merges (`p_54 = 2(45z − 2)(18z + 1)^2`, `m_ρ = 45z − 2`). Times: `singularity_in_k(L_k)` 0.9 s after elimination; `L_k`, `k = 1..60`, fixed `k`, 9.6 s (flint).
 - **python-flint 0.9**: `fmpz_poly.complex_roots()` returns certified Arb balls (fast); `fmpz_poly.real_roots()` raises `NotImplementedError`, so exact real isolation stays with SymPy. Flint is at most an optional accelerator for the numerical step of the circle test (not used yet).
 
+### Step 5: `newton` (design note: `dev/design/newton.md`)
+
+- **Public API**: `flanpy.local_expansion(singularity, *, k=None) -> LocalExpansion[AlgebraicReal]`; `flanpy.local_expansion_in_k(Singularity[KRoot] | KCases[Singularity]) -> KCases[LocalExpansion]` (pieces cover each input piece's `kset`, `uncovered` propagated); `flanpy.LocalExpansion` (`singularity`, `alpha`, `ramification` κ, `b` (Case I) / `c` (Case II), `terms(n)` (fixed `k` only: `n` consecutive exponents in `s = 1 - z/ρ`, step `1/κ`, from 0 (I) or `-α` (II), exact, cached), `specialize`, `k`, `kset`). Broda's conventions: `w = (analytic) - b s^α + ...` (eq. (20)), `1/w = c s^α + ...` (eq. (31)); in Case I `α` is the first non-integer exponent with a non-zero coefficient.
+- **Coefficient field**: `_field.py`, real number fields `Q(θ)` (`θ` an `AlgebraicReal`): arithmetic modulo `m_θ` (flint `fmpq_poly` or SymPy `QQ[x]`, by the `_rings` backend selection), exact zero test and sign, enclosures, `to_real` (squarefree part of the characteristic polynomial), real roots over `Q(θ)` by Trager norms (Trager 1976; Loos 1983), tower flattened. Only real fields are needed: every Puiseux coefficient of `w` is real (Lemma R). SymPy radicals are not used (heuristic zero test; `ρ` itself is often non-radical: the S5 tree `T = z(1 + T^2 + T^5)`). Pitfall: to decide `x = target` refine only `x`'s enclosure.
+- **Local problem**: Case I `G(ρ(1 - s), a + Y)`, Case II the reciprocal polynomial (eq. (29)); `a ∈ Q(ρ)` from `gcd(G(ρ, ·), G_w(ρ, ·))` (in every example). Zero tests of the hull entries by a cascade (zero polynomial; remainder mod `m_ρ`; Broda's gcd test; the field). Polygon on the columns `j <= r` only (`r` = multiplicity of the point).
+- **Which branch is `w`**: the real branches (real roots of each edge's characteristic polynomial); the **rank test** is always on (step 4's window data: rank of `w(x0)` among the real roots of `G(x0, ·)` in its window = rank of `w` among the branches sorted as `s → 0⁺`); the sign rule (`b > 0`, `c > 0`, by monotonicity) and the window count are assertions.
+- **PS 2025 Thm 8.5** re-checked for our scope (polynomial systems, non-negative rational coefficients): its proof uses no integrality; the regular nonlinear case, implicit in the printed proof, is filled in the Notes of `local_expansion`. So Case I has `α = 1/κ`, `κ = 2^m >= 2`, `b > 0`: asserted (`RuntimeError`). Cube roots or `(3/2)`-type singularities cannot occur in Case I (tested at the private curve level); Case II allows `α >= 1` (poles `α = 1`, `(1 - 4z)^{-3/2}`).
+- **Symbolic `k`**: the constant is a `KRoot` **relative to `ρ_k`** (`KRoot(Φ, j, k=k, over=rho_k)`: the `j`-th distinct positive root of `Φ(y, ρ_k, k)`; `Φ` need not be irreducible; reduced modulo `f` over `Q(k)`). An absolute `KRoot` of the norm would split `L_k` at 54/55 (a conjugate of `ρ_k` adds a positive root). `a_k = -s_10/s_11 (ρ_k)` (first subresultant). Cut set: step 4's `P1 ∪ P2(f)` and `P5` (`Res_z(f, s_11)`, `Res_z(f, lc_w G)`, `Res_z(f, q_ij)` on the generic hull, `Res_z(f, disc Φ_E)`); proposition and proof in the Notes of `local_expansion_in_k`. Gaps (`NotImplementedError` naming the piece; fixed `k` works): `a_k` not a rational function of `ρ_k`, a first-level tie.
+- **Results**: Catalan `b = 2`; Motzkin = FS Example VII.18's printed terms; HG `A_k`, Broda `R_k` closed forms for `k = 1..20`; `L_k`: one piece `[1, ∞)`, Case II, `α = 1/2`, `c_k` = eq. (34) exactly (`c_54 = √15/7`), `at(n)` = fixed `k` for `k = 1..60`, 108; `F_k`: one piece, `b_k > 0`, `b_k/√k → 1` (`b_54 = 2√15`); `K = kU/4 + K^2`: pieces `{1}`, `{2}` (`α = 1/4`), `[3, ∞)`, cut at 2 by the hull vertex `(2, 0)`. At `n = 1000` the transfer of the exact terms is within `1e-8..4e-6` (`L_k` 5 terms `8.9e-11`). Times: `local_expansion` 3–30 ms after step 4; `local_expansion_in_k` `L_k` 0.68 s, `F_k` 0.83 s (flint and pure Python alike).
+
 ## Planned layout
 
-Flat private modules (`_name.py`), re-exported from `flanpy`, as in steps 1–4; a
+Flat private modules (`_name.py`), re-exported from `flanpy`, as in steps 1–5; a
 subpackage only where a design note argues for one.
 
 ```
@@ -101,14 +111,17 @@ src/flanpy/
                  (SymPy only), exceptional k (design: dev/design/elimination.md)
   _doctests.py   method_doctests: methods of public classes for a module's __test__
   _algebraic.py  AlgebraicReal (exact real algebraic numbers: minimal polynomial + index,
-                 cached isolating interval), KRoot (a positive root of f(x, k)), root
+                 cached isolating interval), KRoot (a positive root of f(x, k), or of
+                 Φ(y, ρ_k, k) relative to a KRoot ρ_k), root
                  isolation, the circle test; re-exported from flanpy
                  (design: dev/design/singularity.md)
   _singularity.py  Singularity, singularity / singularity_in_k: certificates, window
                  test (Case I/II, a), period, uniqueness, projection set in k
   _field.py      real number fields Q(θ) (exact arithmetic, signs, to AlgebraicReal),
                  real roots over Q(θ) by Trager norms (design: dev/design/newton.md §4)
-  _newton.py     Newton polygon, Newton-Puiseux (design: dev/design/newton.md)
+  _newton.py     LocalExpansion, local_expansion / local_expansion_in_k: local problem,
+                 Newton polygon, real branches, rank test, Hensel lifting, cut set in k
+                 (design: dev/design/newton.md); re-exported from flanpy
   _transfer.py   Thm 3.1 / 3.2, square-root case
   _families.py   expansions in 1/k
   _symbolic.py   grammar -> equations, bivariate cost series (d/du at u=1)
@@ -211,10 +224,11 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - [x] Build-order step 2 (`kset`): done 2026-10-30 (PR #4).
 - [x] Build-order step 3 (`elimination`): done 2026-10-30 (PR #5).
 - [x] Build-order step 4 (`singularity`): done 2026-10-30 (PR #6).
+- [x] Build-order step 5 (`newton`): done 2026-10-30 (PR #7).
 - Broda 2020 §3.4 prints `res_w(G, ∂G/∂w)` as a rational function; it differs from the computed resultant `k^3 z^3 p_k^2 q_k^2`; the conclusion stands; to confirm with the authors (not an erratum).
 - Broda 2020 §3.4, uniqueness for `k > 54`: as extracted, the argument writes `µ_k = 1/(k(2k + 27)ρ_k^2) > 0`; the product of the roots gives `−1/(k(2k + 27)ρ_k^2) < 0`, so there is no contradiction, and `−ρ_k` is a root exactly at `k = 108`. The conclusion stands (design note §5.5). To check against the printed text, then raise with the authors.
 - Pivoteau–Salvy 2025, Algorithm Irr-DS (§7.3), nonlinear branch drops the dominant singularities of critical inputs (a period-1 component fed by a period-2 critical input is singular at `−1`; design note §5.5, test `test_critical_input_is_singular_at_minus_one`). To check against the printed text, then raise with the authors (low priority).
 - Confirm the Broda 2020 eq. (5) erratum with the authors (see Decisions, step 1).
 - Broda 2020 eqs. (37)-(38) use -b_k relative to eq. (20)'s b (b_k > 0 by monotonicity); the limit 1/2 stands; check the printed eqs. (20), (37), (38), then raise with the authors.
 - PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
-- Remaining technical risk: roots of characteristic polynomials that are not expressible in radicals (see Decisions), and Case I curves with larger systems, where the Groebner step may be slow. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.
+- Remaining technical risk: Case I curves with larger systems, where the Groebner step may be slow. Non-radical roots are handled by the number fields of step 5. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.

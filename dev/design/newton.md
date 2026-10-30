@@ -1,7 +1,8 @@
 # Design note: `newton`
 
-Status: approved 2026-10-30 (decisions in Section 11). Chunk 2 (`_field.py`, Section 4.4)
-and chunk 3 (`local_expansion` at a fixed `k`, Section 5.6) implemented.
+Status: approved 2026-10-30 (decisions in Section 11). Implemented: chunk 2 (`_field.py`,
+Section 4.4), chunk 3 (`local_expansion` at a fixed `k`, Section 5.6) and chunk 4
+(`local_expansion_in_k`, `KRoot(over=)`, Section 6.5). Step 5 is complete.
 
 Build-order step 5. From a `Singularity` (step 4): the **local expansion** of the branch
 `w(z)` at its dominant singularity `ρ`. That means the exponent `α`, the ramification
@@ -617,6 +618,43 @@ On the tail piece (`KCases.tail`): `α` and `κ` (constants), `ρ_k = KRoot(f, j
 `a_k = A(ρ_k)` (Case I), and the constant as the relative root of `Φ(y, ρ_k, k)`. That
 is everything Broda eqs. (35)–(37) use: Puiseux of `f` in `1/k`, substitution into
 `Φ`, Newton polygon in `(y, 1/k)`. Step 5 does no expansion in `1/k`.
+
+### 6.5 Implementation (chunk 4)
+
+`KRoot(..., over=rho_k)` in `_algebraic.py`; `local_expansion_in_k` and
+`_FamilyExpansion` in `_newton.py`; tests in `tests/test_newton_in_k.py` and
+`tests/test_algebraic.py` (relative `KRoot`).
+
+- **`KRoot(over=)`** (Q2 (a)): `Φ` in `(y, z, k)`, stored with integer coefficients,
+  primitive, positive leading coefficient (`y > z > k`); not required irreducible;
+  `positive_index` counts the distinct positive roots of `Φ(·, ρ_n, n)`, computed by
+  `_NumberField(ρ_n).real_roots`; equality, hash, pickling and `repr` include `over`.
+  Existing `KRoot`s are unchanged (their tests pass as they were).
+- **The local polynomial for symbolic `k`**: `s_11^m G(z(1 - s), A + Y)` (Case I,
+  `A = -s_10/s_11`, so `A + Y = (-s_10 + s_11 Y)/s_11`) or `H(z(1 - s), Y)` (Case II),
+  a polynomial in `(s, Y, z, k)`; an entry is generically zero iff
+  `Res_z(f, q_ij) ≡ 0`.
+- **The cut set includes step 4's `P1 ∪ P2(f)`** (recomputed through `_Family`), not
+  only `P5`. The proposition needs them: continuity and simplicity of `ρ_k`, `a_k`,
+  and step 4's window data near each `k0` (item 4 of the proof). The cost is a few
+  more samples.
+- **`Φ` is reduced**: content in `(z, k)` removed, coefficients reduced modulo `f`
+  over `Q(k)`, denominators cleared. For `L_k` this gives eq. (34) exactly:
+  `((k^2 + 12k) z^2 + 4k z + 1) y^2 - ((24k + 324) z^2 + 72z - 1)`. Without it, `F_k`'s
+  `Φ` had degree 21 in `z`.
+- **Results**: `L_k`, `F_k`, `R_k`, `A_k`: one piece `[1, ∞)`; `L_k` instantiates 54
+  and 108 (roots of `Res_z(p_k, num)` and of step 4's set) and merges both. `at(n)`
+  equals the fixed-`k` constant for `k = 1..60` and 108 (`L_k`, `F_k`; slow test, 20
+  s) and the closed forms for `k = 1..20` (`R_k`, `A_k`). The family
+  `K = kU/4 + K^2`, `U = z + U^2`: step 4 gives `{1}`, `[2, ∞)`; step 5 gives `{1}`
+  (`α = 1/2`, `b = 1/√32`), `{2}` (`α = 1/4`, `κ = 4`, `b = 1/2`), `[3, ∞)`
+  (`α = 1/2`, `Φ = (4k - 8) y^2 - (k - 1)`: `b_3 = 1/√2`, `b_4 = √6/4`). At `k = 2`
+  the vertex `(2, 0)` vanishes (`Res_z(f, q_02) ∝ k^8 (k - 2)^13`: `a_2` becomes a
+  4-fold root), and so do the vertex `(0, 1)` (`(k - 2)^12`), `Res_z(f, s_11)`
+  (`(k - 2)^3`) and step 4's `disc_z R̃` (`(k - 2)^4`: `ρ_2 = 1/4` meets the radius of
+  `U`; step 4 merged it).
+- **Timings** (Apple M1, after step 4): `local_expansion_in_k` `L_k` 0.68 s / 0.70 s,
+  `F_k` 0.83 s / 0.85 s (flint / pure Python).
 
 ## 7. Output types and public API
 
