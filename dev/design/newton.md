@@ -1,7 +1,7 @@
 # Design note: `newton`
 
 Status: approved 2026-10-30 (decisions in Section 11). Chunk 2 (`_field.py`, Section 4.4)
-implemented.
+and chunk 3 (`local_expansion` at a fixed `k`, Section 5.6) implemented.
 
 Build-order step 5. From a `Singularity` (step 4): the **local expansion** of the branch
 `w(z)` at its dominant singularity `ρ`. That means the exponent `α`, the ramification
@@ -94,9 +94,11 @@ Consequences for `w`:
 
 So **a cube-root or a `(3/2)`-type singularity in Case I cannot occur** for a series of
 our scope. The algorithm below does not rely on this. It is general Newton–Puiseux, and
-PS Thm 8.5 enters only as a check: a test-suite property until chunk 3 re-checks PS's
-hypotheses against the printed proof for our scope, and only then an internal
-`RuntimeError` assertion (Q5). It never fails on user input before that.
+PS Thm 8.5 enters only as a check (Q5). **Re-checked in chunk 3 against the printed
+proof** (PS §8.2.1 and Appendix D): the hypotheses hold for our scope, with one step
+the printed proof leaves implicit (the regular nonlinear case, filled in Section 5.6).
+So `α = 1/κ`, `κ = 2^m >= 2` in Case I is now an internal `RuntimeError` assertion, and
+stays a test-suite property too.
 Exponents `1/3` and `3/2` (Case I) are therefore tested at the private curve level
 (Section 8), and `1/4` end to end.
 
@@ -461,6 +463,53 @@ stands; to confirm with the authors". The exact limits `2/(b_k c_k)` are
 `0.42, 0.44, 0.47`, closer than the approximation `1/2 − 1/(4√(2k))`
 (`0.375, 0.444, 0.475`). At `k = 54`: `b = 2√15`, `c = √15/7`, ratio exactly `7/15`.
 This belongs to the step 6–7 examples, not to step 5.
+
+### 5.6 Implementation (chunk 3)
+
+`src/flanpy/_newton.py` (`LocalExpansion`, `local_expansion`), tests in
+`tests/test_newton.py`; `_singularity.py` returns the window data (`_Window`,
+`_window_of`; step 4 results unchanged, its tests pass as they were).
+
+- **Local problem** (2.1): `q_ij` by expanding `G(ρ(1 - s), a + Y)` (or `H`) in `K`.
+  `a ∈ Q(ρ)` by Section 2.3's three branches (the third, `Q(ρ, a)` by `real_roots`, is
+  tested on `(w^2 - 2)^2 + (z - 1) w` at `ρ = 1`; no example reaches it).
+- **Zero-test cascade** (2.2): each hull entry is decided by the first rule that
+  applies: `zero polynomial`, `remainder mod m_rho` (`K = Q(ρ)`), `gcd test`
+  (Broda, proves non-zero), `field`. A private counter (`_newton._STATS`) records the
+  rule. In every example the second rule decides; the last two are tested by forcing
+  `K ≠ Q(ρ)` on `F_2`.
+- **Branches**: the real roots of each edge's `φ`; a binomial edge at the top level
+  uses the fast path (2.4: `AlgebraicReal`s from the norm `m_u(y^d)`, the field built
+  only for `terms`); other edges use `_NumberField.real_roots`; a multiple root
+  restarts the polygon. The rank test is always on; the sign rule and `n_W` are
+  assertions (`RuntimeError`).
+- **Terms**: Hensel lifting by undetermined coefficients, incremental (powers of `V`
+  kept), in the field of the branch; Case II inverts `V` as a series. `terms(n)` gives
+  `n` consecutive exponents, zeros included, from `0` (I) or `-α` (II).
+- **PS Thm 8.5 for our scope.** The proof of Thm 8.5 uses sums, products, linear
+  components and Prop. 8.2, whose proof (Appendix D) needs non-negative Taylor
+  coefficients, irreducibility and polynomial dependence on the inputs, never integer
+  coefficients; positive rational constants keep a negative `Z^{1/r}` coefficient
+  negative. The implicit step: in the regular nonlinear case (`Λ_H(ρ) < 1`), the
+  `Z^{1/r}` coefficient is `−(I − J(ρ))^{-1} W` with `(I − J(ρ))^{-1} > 0` entrywise
+  (`J` irreducible, non-negative, `Λ < 1`) and `W >= 0`, `W ≠ 0` (PS eq. (35)), so it
+  is negative. The argument is in the Notes of `local_expansion`.
+- **`n = 1000` (slow tests; transfer by `Γ` ratios, a test helper).** Catalan
+  `3.76e-6` (5 terms), Motzkin `1.14e-8` (6), `R_2` `2.93e-6`, `A_2` `3.26e-6`,
+  constructed `3.94e-6`, S5 tree `5.22e-7` (5 each), `F_k` `2.84e-6`, `2.82e-6`,
+  `2.78e-6` (`k = 2, 10, 50`; 4 terms). `L_k`, with `1/V` inverted: 3 or 4 terms
+  (singular exponents `−1/2`, `1/2`) `9.9e-8`, an `O(n^{-2})` error like `F_k`'s 4
+  terms (`1/2`, `3/2`) but with a smaller constant; 5 terms (`−1/2`, `1/2`, `3/2`)
+  `8.9e-11` (`k = 2, 10, 50`), `O(n^{-3})`. Bounds: 3 times these.
+- **Timings** (Apple M1, after step 4; `local_expansion` + `terms(6)`, flint / pure
+  Python): Catalan 0.005 + 0.001 s / 0.005 + 0.001 s; Motzkin 0.005 + 0.003 /
+  0.005 + 0.003; `R_2` 0.012 + 0.019 / 0.010 + 0.022; `A_2` 0.006 + 0.002 /
+  0.007 + 0.003; `α = 1/4` 0.007 + 0.001 / same; pole 0.003 + 0.001 / 0.003 + 0.002;
+  `α = 3/2` 0.006 + 0.001 / 0.006 + 0.002; constructed 0.019 + 0.037 / 0.021 + 0.044;
+  S5 tree 0.015 + 0.059 / 0.017 + 0.069; `L_2` 0.023 + 0.011 / 0.024 + 0.018; `F_2`
+  0.018 + 0.033 / 0.020 + 0.038; `L_50` 0.025 + 0.011 / 0.026 + 0.018; `F_50`
+  0.019 + 0.027 / 0.021 + 0.032; `L_108` 0.028 + 0.014 / 0.028 + 0.019. Step 4
+  dominates (`singularity(L_k)` about 0.2 s).
 
 ## 6. Symbolic `k`
 
