@@ -1,6 +1,7 @@
 # Design note: `singularity`
 
-Status: draft for approval (build-order step 4, chunk 1). 2026-10-30.
+Status: approved 2026-10-30 with amendments (answers in Section 11). Chunk 2
+(`AlgebraicReal`, the circle test, `KCases.flat_map`) implemented on branch `singularity`.
 
 Build-order step 4. From a `Curve` `G(z, w, k) = 0` (step 3) and its branch, the series
 `w(z)` of `curve.system`, find the **dominant singularity** `ρ` of the branch (not of the
@@ -170,9 +171,10 @@ and `q_k` has a **positive root below `ρ_k` for every `k`** (spike: `k = 1`: 0.
 wrong for the acceptance example itself. Broda 2020 §3.4 prints
 `res_w(G, ∂G/∂w) = z p_k(z) / (k^2 (4k^2 z^4 − 4k^2 z^3 + k(k + 24) z^2 + 4(k − 4) z − 4))`,
 a rational function. The computed resultant of eq. (17) is the polynomial
-`k^3 z^3 p_k^2 q_k^2` (spike). The conclusion ("the singularities of `L_k` must be zeros
-of `p_k`") is right (Section 3.3, `k = 1..60`), but the printed formula does not show it.
-This is question Q5.
+`k^3 z^3 p_k^2 q_k^2` (spike). **The printed formula differs from the computed resultant
+`k^3 z^3 p_k^2 q_k^2`; the conclusion ("the singularities of `L_k` must be zeros of
+`p_k`") stands (Section 3.3, `k = 1..60`); to confirm with the authors.** The examples use
+this wording. It is not an erratum (answer to Q5).
 
 Two more examples. The constructed one (spike): `F = z + zF^2 + zG`, `G = z + zG^2` has
 candidates `0.2144 < 0.4064 < 0.5`, and `ρ_F = 0.4064` is the **second** one (the first
@@ -188,10 +190,19 @@ search (`⌈log2 s⌉` decisions; one for `L_k`, two for the constructed example
 avoids the connection problem entirely. Each decision is a **certificate checked in exact
 rational arithmetic**.
 
-Let `Y = H(z, Y)` be the closure, with zero coordinates removed. It is polynomial with
-non-negative coefficients at the given `k`, and well-founded in the sense of PS Def. 3.1
-(that is the PSS 2012 criterion of `system.md`). Let `J = ∂H/∂Y` and `Λ` the spectral
-radius.
+Let `Y = H(z, Y)` be **the closure of `w`** (Section 1.1), with zero coordinates removed.
+It is polynomial with non-negative coefficients at the given `k`, and well-founded in the
+sense of PS Def. 3.1 (that is the PSS 2012 criterion of `system.md`). Let `J = ∂H/∂Y`
+and `Λ` the spectral radius.
+
+**The certificates run on the closure only, never on the whole system.** Its radius is
+the radius of `w` (positivity: `w` dominates termwise a positive multiple of
+`z^p U` for every `U` it depends on, so its radius is at most theirs, and `w` is analytic
+wherever the closure is). An unknown outside the closure can have a smaller radius and
+would answer "`q > ρ`" wrongly. The chunk 1 spike had this bug: with
+`U = 1 + 10zU^2` (radius `1/40`) added to the constructed example, `compare` answered
+"above" for `q ∈ (0.214, 0.406)`, and the `x0` assertion failed. It is fixed in the
+spike, and the system is in the tests (Section 8).
 
 - **`q < ρ` certificate**: a rational vector `u >= 0` with `H(q, u) <= u` componentwise.
   *Proof.* The Kleene iterates `Y_n` (polynomials with non-negative coefficients
@@ -206,7 +217,13 @@ radius.
 - **`q > ρ` certificate**: a vector `ℓ` built from `0` by sound steps, with
   `Λ(J(q, ℓ)) >= 1`. Sound steps are Kleene steps `ℓ ← H(q, ℓ)`, or Newton steps
   `ℓ ← ℓ + (I − J(ℓ))^{-1}(H(ℓ) − ℓ)` taken only while `Λ(J(ℓ)) < 1`, each rounded
-  *down*. *Proof.* If `q <= ρ`, then `q < ρ` and, by induction, `ℓ <= Y(q)`. For a
+  *down* **and clamped from below by the previous iterate**:
+  `ℓ_{n+1} = max(round_down(N(ℓ_n)), ℓ_n)` componentwise (the spike's
+  `max(down(·), old)`). So `ℓ_n >= 0` and `ℓ_n` is non-decreasing. The proof needs both:
+  `ℓ >= 0` keeps `(q, ℓ)` in the orthant where `J(q, ℓ) >= 0` and convexity applies, and
+  the clamp keeps rounding from undoing progress. Taking a max of two vectors that are
+  both `<= Y(q)` keeps the bound. *Proof.* If `q <= ρ`, then `q < ρ` and, by induction,
+  `ℓ <= Y(q)`. For a
   Newton step, `Y − N(ℓ) = (I − J(ℓ))^{-1}[H(Y) − H(ℓ) − J(ℓ)(Y − ℓ)] >= 0` by
   convexity (PS Lemma 3.5) and `(I − J)^{-1} >= 0`. Then
   `Λ(J(q, ℓ)) <= Λ(J(q, Y(q))) < 1` (monotonicity of `Λ` on non-negative matrices,
@@ -303,7 +320,9 @@ Every singularity is a candidate (Lemma VII.4), so: **no other root of `R` on `|
 implies that `ρ` is unique, with proof.** The test is exact. For each irreducible factor
 `f` of `R`, `P_f(y) = Res_z(f(z), z^{deg f} f(y/z))` has as roots all the products
 `σ_i σ_j` of roots of `f`. A root `σ ≠ ρ` with `|σ| = ρ` makes `ρ^2 = σσ̄` such a product.
-So test `gcd(P_f, m_{ρ²}) = 1`, with `m_{ρ²} = Res_x(m_ρ(x), y − x^2)`. For `f = m_ρ`,
+So test `gcd(P_f, m_{ρ²}) = 1`, with `m_{ρ²} = Res_x(m_ρ(x), y − x^2)`. **The factor
+`f = z` of `R` is skipped**: `0` is never on the circle, and `P_z` is degenerate
+(`Res_z(z, y)` is a constant). For `f = m_ρ`,
 take `P_f / Res_z(f, y − z^2)` (pairs `i ≠ j`) and separately test whether `−ρ` is a root
 of `f`. If a gcd is non-trivial, numerics identify which roots lie on the circle (the
 spike's periodic example finds `−1/2`). Spike: `L_k`, `k = 1..60`: no other candidate on
@@ -394,9 +413,26 @@ constant, and so is `unique`.
    also holds near `k0`, so `ρ` is upper semicontinuous.
 4. A continuous function on a connected `I` that takes its values in
    `{σ_1(k), ..., σ_s(k)}` (distinct continuous functions) equals one `σ_i` throughout.
-5. The case and `a`: the window test of Section 4.1 uses only strict inequalities at
-   `(x0, q_j)`, so it is locally constant in `k`. `Ñ`'s roots stay distinct and away from
-   `0` (`P`), so `a_k` keeps its factor and index.
+5. **The case and `a_k`: the window index is locally constant.** Fix `k0 ∈ I` and the
+   data of the window test there: separators `q_j` for `Ñ(·, k0)` and a point `x0`.
+   (a) The roots of `Ñ(·, k)` are distinct with `lc_w Ñ ≠ 0` (`P`), so they move
+   continuously, and for `k` near `k0` the same rationals `q_j` separate them, one root
+   per window as at `k0`.
+   (b) `G(x, q_j, k0) ≠ 0` on the compact `[x0, ρ_{k0}]` (at `ρ_{k0}` because `q_j` is
+   not a root of `G(ρ, ·)`). So it is non-zero on `[x0, ρ_k]` for `k` near `k0`
+   (`ρ_k` continuous, item 3). Likewise `σ_{i−1}(k) < x0 < ρ_k`, so `[x0, ρ_k)` holds
+   no candidate. The test's hypotheses therefore hold at `k` with the same data.
+   (c) `w(x0, k)` is continuous in `k`. The coefficients `w_n(k)` are polynomials with
+   non-negative coefficients in `t = k − 1`, hence non-decreasing in `k`, so on
+   `[k0 − ε, k0 + ε]` they are bounded by `w_n(k0 + ε)`, and
+   `Σ w_n(k0 + ε) x0^n < ∞` because `x0 < ρ_{k0+ε}`. Uniform convergence follows
+   (M-test). `w(x0, k)` is never a `q_j` (by (b)), so it stays in its window.
+   Hence the window index is locally constant, so constant on the connected `I`, and so
+   is the case. In Case I, `a_k` is the root of `Ñ(·, k)` in that window. It is
+   continuous, it stays in one irreducible factor `g` (roots of distinct factors never
+   meet: `disc_w Ñ ≠ 0`), and it keeps its positive index `j'` (`g`'s positive roots
+   stay distinct and away from `0`: `Ñ(0, k) ≠ 0`). The full proof goes in the chunk 4
+   docstring.
 
 This **needs no monodromy argument** and no degree-drop conditions. An earlier draft of
 this note used both. Continuity of `ρ_k` plus distinctness of the candidates is enough.
@@ -452,9 +488,9 @@ class AlgebraicReal:  # fixed number (Section 2)
     # __eq__/__hash__ exact on (polynomial, index); <, <= exact; immutable; picklable
 
 
-class KRoot:  # "the index-th positive root of polynomial(x, k)" (Section 6.1)
+class KRoot:  # "the positive_index-th positive root of polynomial(x, k)" (Section 6.1)
     polynomial: sympy.Poly  # irreducible over Q(k), gens (x, k)
-    index: int
+    positive_index: int  # among the positive roots, from 0 (not AlgebraicReal.index)
 
     def at(self, k: int) -> AlgebraicReal: ...  # exact; factors polynomial(x, k)
 
@@ -535,6 +571,14 @@ pickling. `hypothesis`: random squarefree integer polynomials, isolated roots ag
 **Candidate not a singularity:** the constructed `F = z + zF^2 + zG`, `G = z + zG^2`:
 `ρ` is the 2nd of 3 positive candidates. Plus `L_k` above.
 
+**Closure only:** the same system with `U = 1 + 10zU^2` added (radius `1/40`, outside
+the closure of `F`) gives the same `ρ_F ≈ 0.4064`, and the certificates at
+`q ∈ (0.214, 0.406)` say `q < ρ`.
+
+**Certificates near `ρ`** (Q6): for `L_2` and the constructed example, rationals
+`q = ρ ± 2^-60` (rounded to a rational on the right side of `ρ`) get the right
+certificate on both sides.
+
 **Signed:** `F = 1 − zF^2` raises `UndecidedSingularityError` listing `{0, −1/4}`.
 
 **Uniqueness:** periodic `T = z + zT^2`: `period = 2`, `unique = False`, `−1/2` found
@@ -582,25 +626,31 @@ Step 4 is split (design question 9):
 | chunk | content | PR |
 |---|---|---|
 | 1 | this note + spike | draft PR "Step 4: singularity" |
-| 2 | `AlgebraicReal` + `_algebraic.py` helpers (isolation, sign, compare, window, circle) + `KCases.flat_map`; tests; guide page part 1 | same branch |
-| 3 | `singularity` at fixed `k` for non-negative closures: certificates, Case I/II, period, uniqueness, errors; tests (all examples, `L_k` for `k = 1..60`, slow ratio test); catalan.py step 4 | same branch |
+| 2 | `AlgebraicReal` + `_algebraic.py` helpers (isolation, sign, compare, separators, circle test) + `KCases.flat_map`; tests; guide page part 1 | same branch |
+| 3 | `singularity` at fixed `k` for non-negative closures: certificates, window test, Case I/II, period, uniqueness, errors; tests (all examples, `L_k` for `k = 1..60`, slow ratio test); catalan.py step 4 | same branch |
 | 4 | `singularity_in_k`, `KRoot`, projection set, cuts, merge; `L_k` acceptance for all `k`; broda2020.py step 4; guide part 2; CLAUDE.md | same branch |
 
 Chunks 2–3 are useful on their own (fixed `k`), and chunk 4 carries the only new
 argument (Section 6.2). One PR, as in earlier steps, reviewed per chunk.
 
-## 11. Questions for approval
+## 11. Decisions (approved 2026-10-30)
 
-- **Q1 Scope.** Non-negative closures only; signed closures raise
-  `UndecidedSingularityError`, and `deg_w G <= 2` and ACA are later work. OK?
-- **Q2 Names.** `AlgebraicReal`, `KRoot`, `Singularity` (`rho`, `case`, `a`, `period`,
-  `unique`), `singularity` / `singularity_in_k`, `UndecidedSingularityError`,
-  `SingularityWarning`, public `KCases.flat_map`.
-- **Q3 Undecided uniqueness** is a warning with `unique=None`, not an error.
-- **Q4 Chunks** as in Section 10.
-- **Q5 Broda 2020 §3.4**: the printed `res_w(G, ∂G/∂w)` is a rational function and lacks
-  the `q_k^2` factor of the actual resultant (Section 3.2). Note it in the example as
-  "to confirm with the authors", like the eq. (5) erratum?
-- **Q6 Rounding.** Certificates with rounded-down Newton steps, more precision per round,
-  and moving `q` within its gap after a budget. The termination argument with rounding is
-  sketched here (Section 3.3). Acceptable, with the full argument in the docstring?
+- **Q1 Scope**: yes. Non-negative closures only; signed closures raise
+  `UndecidedSingularityError`. Its message says that the `k = 1 + t` test is
+  *sufficient, not necessary*: a system it rejects may still have non-negative series.
+  `deg_w G <= 2` and ACA are later work.
+- **Q2 Names**: yes, with `KRoot.index` renamed **`positive_index`**.
+  `AlgebraicReal.index` counts real roots, and one name must not mean two things.
+- **Q3**: yes, undecided uniqueness is a warning with `unique=None`. Step 6 refuses
+  `unique != True`.
+- **Q4 Chunks**: as in Section 10.
+- **Q5**: worded as "differs from the computed resultant `k^3 z^3 p_k^2 q_k^2`; the
+  conclusion stands; to confirm with the authors", not as an erratum (Section 3.2).
+- **Q6**: yes. The full termination argument goes in the chunk 3 docstring, with tests
+  at `q` within `2^-60` of `ρ` on both sides (Section 8).
+
+Amendments folded in after approval: the certificates run on the closure of `w`
+(Section 3.3, with the spike fixed and the `U = 1 + 10zU^2` test); rounded Newton steps
+clamped by the previous iterate (Section 3.3); the factor `z` skipped in the circle test
+(Section 5.1); constancy of the case and `a_k` (Section 6.2, item 5); `positive_index`
+(Section 7).

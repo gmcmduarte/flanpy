@@ -118,12 +118,19 @@ def separators(rs: list[Alg]) -> list[Fraction]:
 
 
 class PosSystem:
-    """Y = H(z, Y), polynomial with non-negative integer coefficients (k fixed)."""
+    """The closure of w: Y = H(z, Y), polynomial, non-negative coefficients (k fixed).
 
-    def __init__(self, system: System, kval: int | None) -> None:
+    Only the unknowns w depends on, zero coordinates removed (design Sec 3.3): an
+    unrelated unknown with a smaller radius must not decide q vs rho.
+    """
+
+    def __init__(self, system: System, kval: int | None, w) -> None:
+        from flanpy._elimination import _closure
+
         s = system.specialize(kval) if system.k is not None else system
-        self.Y = list(s.unknowns)
-        self.H = [sp.Poly(s.equations[y], z, *self.Y, domain=QQ) for y in self.Y]
+        unknowns, eqs = _closure(s, w)
+        self.Y = list(unknowns)
+        self.H = [sp.Poly(eqs[y], z, *self.Y, domain=QQ) for y in self.Y]
         assert all(c >= 0 for h in self.H for c in h.coeffs()), "signed system"
         self.J = [[h.diff(y) for y in self.Y] for h in self.H]
         self.m = len(self.Y)
@@ -238,7 +245,7 @@ def singular_fixed(system: System, w: sp.Symbol, kval: int | None, verbose=True)
     t0 = time.perf_counter()
     curve = eliminate(system, w, k=kval)
     G = sp.Poly(curve.polynomial.as_expr(), w, z, domain=QQ)
-    S = PosSystem(system, kval)
+    S = PosSystem(system, kval, w)
     R = candidates(G, w)
     pos = positive(real_roots(R))
     qs = [Fraction(0)] + [(r.hi + s.lo) / 2 for r, s in zip(pos, pos[1:], strict=False)]
@@ -346,8 +353,8 @@ def on_circle(R: sp.Poly, rho: Alg) -> list[complex]:
     for fac, _ in sp.factor_list(R.as_expr(), z)[1]:
         f = sp.Poly(fac, z, domain=QQ)
         d = f.degree()
-        if d <= 0:
-            continue
+        if d <= 0 or f.monic() == sp.Poly(z, z, domain=QQ):
+            continue  # z = 0 is never on the circle, and P_z is degenerate
         P = sp.Poly(sp.resultant(f.as_expr(), sp.expand(z**d * f.as_expr().subs(z, y / z)), z),
                     y, domain=QQ)  # roots sigma_i sigma_j, all ordered pairs
         Gr = sp.Poly(sp.resultant(f.as_expr(), y - z**2, z), y, domain=QQ)  # sigma_i^2
@@ -395,6 +402,10 @@ catalan = System({F: 1 + z * F**2}, z=z)
 rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
 hg = System({B: k * z + 2 * z * B**2 + 2 * z * B, A: 2 * z + B}, z=z, k=k)
 constructed = System({F: z + z * F**2 + z * Gs, Gs: z + z * Gs**2}, z=z)
+# plus an unknown F does not depend on, with a smaller radius (1/40): the
+# certificates must run on the closure of F, not on the whole system
+U = sp.Symbol("U")
+unrelated = System({F: z + z * F**2 + z * Gs, Gs: z + z * Gs**2, U: 1 + 10 * z * U**2}, z=z)
 periodic = System({T: z + z * T**2}, z=z)
 
 EXAMPLES = [
@@ -402,6 +413,7 @@ EXAMPLES = [
     ("Broda R_k, k = 2", rk, R, 2),
     ("HG A_k, k = 2", hg, A, 2),
     ("constructed F = z + zF^2 + zG, G = z + zG^2", constructed, F, None),
+    ("constructed + unrelated U = 1 + 10 z U^2", unrelated, F, None),
     ("periodic T = z + zT^2", periodic, T, None),
     ("Broda F_k = z + B + Bb, k = 2", fk, F, 2),
     ("Broda L_k, k = 2", ssnf, L, 2),
@@ -642,7 +654,7 @@ def section_signed() -> None:
     print(f"  |[z^200] / [z^199]| = {float(abs(c[200] / c[199])):.6f} (-> 4), sign of [z^199]:"
           f" {'+' if c[199] > 0 else '-'}")
     try:
-        PosSystem(signed, None)
+        PosSystem(signed, None, F)
     except AssertionError as e:
         print(f"  certified bracketing refuses it: {e}")
 
