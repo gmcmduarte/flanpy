@@ -141,7 +141,7 @@ def test_repr_and_str() -> None:
     assert repr(a) == "AlgebraicReal(23*z**2 + 2*z - 1, 1)"
     assert eval(repr(a), {"AlgebraicReal": AlgebraicReal, "z": z}) == a
     assert str(a) == "0.169520847198537 (root 1 of 23*z**2 + 2*z - 1)"
-    assert str(AlgebraicReal(4 * z - 1, 0)) == "0.25 (root 0 of 4*z - 1)"
+    assert str(AlgebraicReal(4 * z - 1, 0)) == "1/4"  # rational: exact
 
 
 def test_refine() -> None:

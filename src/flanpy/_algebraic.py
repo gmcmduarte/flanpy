@@ -493,6 +493,9 @@ class AlgebraicReal:
         return f"AlgebraicReal({sp.sstr(self._poly.as_expr())}, {self._index})"
 
     def __str__(self) -> str:
+        if len(self._coeffs) == 2:  # rational: exact
+            a, b = self._coeffs
+            return str(sp.sstr(sp.Rational(-b, a)))
         value = mpmath.nstr(self.evalf(20), 15)
         return f"{value} (root {self._index} of {sp.sstr(self._poly.as_expr())})"
 
