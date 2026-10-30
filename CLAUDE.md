@@ -2,7 +2,7 @@
 
 Open-source Python package implementing the analytic-combinatorics toolchain used by our research group (Broda, Machiavelo, Moreira, Reis, and Guilherme), so that papers can ship a runnable script that reproduces their results, instead of Mathematica files.
 
-This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`) and 2 (`KSet`) are implemented; the later steps are not. Update this file when decisions change.
+This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`), 2 (`KSet`) and 3 (`elimination`) are implemented; the later steps are not. Update this file when decisions change.
 
 ## What the package does
 
@@ -34,7 +34,7 @@ Reference papers (in Guilherme's Zotero library):
 - **Licence**: GPL-3.0-or-later (compatible with SymPy BSD, python-flint MIT, Sage GPL). Confirmed by the supervisors and the institution. Add an SPDX header to every source file.
 - **Audience**: mainly our group, but external use is encouraged, so: stable public API, documentation, and proper packaging from the start.
 - **Backend**: SymPy by default (pure Python, pip-installable). Optional Sage/Singular backend for heavy Gröbner computations. `python-flint` may be used for fast polynomial arithmetic when installed.
-- **Gröbner computations**: use `sympy.groebner(..., order='lex', method='f5b')` with `k` as an ordinary polynomial variable ordered **last**. Measured on eq. (17) of Broda 2020: F5B 1.4 s; default Buchberger 109 s; `domain=QQ.frac_field(k)` did not finish in 250 s. Do not use the fraction-field domain for the elimination step.
+- **Gröbner computations**: use `sympy.groebner(..., order='lex', method='f5b')` with `k` as an ordinary polynomial variable ordered **last**. Measured on eq. (17) of Broda 2020: F5B 1.4 s with pure-Python ground types, 0.87 s with python-flint ground types; default Buchberger 109 s; `domain=QQ.frac_field(k)` did not finish in 250 s. Do not use the fraction-field domain for the elimination step.
 - **k appears only in coefficients** of the curves (never in degrees or exponents) in the current framework.
 - **Conditions on k**: `k` is the only parameter, so every condition is a sign/vanishing condition on univariate polynomials in `k`, i.e. a finite union of integer points and intervals, e.g. `{2} U [3,53] U {54} U [55, inf)`. Each result carries the set `KSet` of `k` where it is valid (exact real-root isolation); results combine by intersecting `KSet`s. Exceptional `k` (roots of leading coefficients, denominators, discriminants) are collected and handled by instantiation. If a case cannot be decided, say so explicitly; never guess.
 - **Finding `alpha` and Puiseux expansions (validated by a spike, see `dev/spikes/np_spike.py`)**:
@@ -60,6 +60,17 @@ Reference papers (in Guilherme's Zotero library):
 - **Denominators**: `den` is passed separately and never cancelled against `p`: its roots are always excluded (they record a division in the derivation). Rational `Expr`s are rejected. Cancel first for the lowest-terms reading.
 - **`KCases`** (piecewise results: disjoint `KSet` pieces -> values, with `uncovered` explicit and `KeyError` there): implemented and tested, private in `flanpy._kset` until step 3 returns one.
 - `System` and `series` do not use `KSet` (a generic well-posedness pass holds for every `k`).
+- **`KCases`** became public in step 3, with `tail` (the piece containing all large `k`).
+
+### Step 3: `elimination` (design note: `dev/design/elimination.md`)
+
+- **Public API**: `flanpy.eliminate(system, w, *, k=None, method="auto") -> Curve` (fixed `k`), `flanpy.eliminate_in_k(system, w, *, method="auto") -> KCases[Curve]` (symbolic `k`, covering every `k >= 1`), `flanpy.Curve` (`polynomial`, `w`, `z`, `k`, `kset`, `system`, `as_expr`, `specialize`). Curves are created only by these functions.
+- **`G`** is the minimal polynomial of the series `w(z)` over `Q(k)(z)`, normalised: `Z[k]` coefficients, primitive over `Z[k]`, positive leading coefficient in lex `w > z > k`. Broda 2020 eq. (17) comes out exactly (unit 1). `G` is absolutely irreducible.
+- **Method**: only the unknowns `w` depends on take part, with zero coordinates set to 0; one unknown means no elimination; two use a resultant; otherwise lex F5B with the other unknowns first (system order) and `k` last. If the elimination ideal has no element in `w`, the ideal is saturated by the Jacobian determinant. That is a fallback only (did not finish in 300 s for `L_k`). Variable order matters (`L_k`: 0.87 s vs 7.1 s reversed).
+- **Factor selection is exact**: `N = max_{i≠j} (deg_w h_i deg_z h_j + deg_w h_j deg_z h_i)` terms separate the factors (`Res_w(g, h) = A g + B h`). For symbolic `k` the test runs at `k = 2, 3, ...` (a single passing factor is proven right), and falls back to series in `Q[k]`.
+- **Exceptional `k`**: the candidates `X_GB` (leading coefficients of **all** Gröbner basis elements; Kalkbrener 1997 Thm 3.1, generalising Gianni 1987), `X_cont`, `X_deg` (degree drop in `w`), `X_sqf` (not squarefree) and `X_prim` (content in `z` at `n`, computed exactly via `Res_z`) are recomputed at `k = n`. A candidate merges back into the generic piece when the renormalised `G(·, ·, n)` equals the recomputed curve with full degree. For `L_k`, `k = 54` is a candidate (Kalkbrener's criterion **fails** there), yet it merges: one piece `[1, ∞)`.
+- **Documented gap**: on the generic piece, irreducibility of `G(·, ·, n)` is not certified (finitely many failures, Noether 1922). `Curve.specialize(n)` certifies one `n`. There is no gap when `deg_w G = 1`.
+- **Backends**: private `_GroebnerBackend` protocol with the SymPy backend only; no public `backend=` until a second backend exists (Singular / Sage planned; Sage is installed on the maintainer's machine).
 
 ## Planned layout
 
@@ -69,9 +80,12 @@ src/flanpy/
   _series.py     series / series_in_k: coefficients of a System; re-exported from flanpy
   _rings.py      private coefficient rings: pure-Python and python-flint backends
   _kset.py       KSet (sets of k >= 1 from sign conditions) and KCases (piecewise
-                 results); KSet re-exported from flanpy (design: dev/design/kset.md)
+                 results); both re-exported from flanpy (design: dev/design/kset.md)
+  _curve.py      Curve (the curve G(z, w, k) = 0 of one coordinate), normalisation and
+                 the exact factor selection; re-exported from flanpy
+  _elimination.py  eliminate / eliminate_in_k, resultants, Groebner backend protocol
+                 (SymPy only), exceptional k (design: dev/design/elimination.md)
   symbolic/      grammar -> equations, bivariate cost series (d/du at u=1)
-  elimination/   Groebner and resultants, backend interface
   singularity/   m_rho, m_a, Case I/II, dominant-singularity checks
   newton/        Newton polygon, Newton-Puiseux
   transfer/      Thm 3.1 / 3.2, square-root case
@@ -123,7 +137,7 @@ All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` l
 - **Extras**: `fast` (python-flint), `dev` (pytest, hypothesis, ruff, mypy, numpydoc, build, twine), `docs` (sphinx, shibuya, myst-parser, myst-nb, jupytext, sphinxcontrib-bibtex).
 - **Types**: `mypy --strict` (chosen over pyright: Python-native, no Node dependency). Tests are type-checked but may omit annotations.
 - **Lint/format**: `ruff` with pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, RUF and pydocstyle (NumPy convention). `dev/spikes/` is excluded (throwaway code).
-- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors. Tests marked `slow` (N = 1000) are deselected by default (`-m "not slow"` in `addopts`); run them with `pytest -m slow`. Test helpers (e.g. `tests/_enumerate.py`, the brute-force enumerator for Broda 2020) are importable because `tests` is on pytest's `pythonpath`. Property-based tests use `hypothesis` with a derandomized profile (`tests/conftest.py`). Doctests of a private module import its names from that module, not from `flanpy`: when pytest (importlib mode) collects a module alone, it executes it a second time, and the re-exported classes then differ.
+- **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors. Tests marked `slow` (N = 1000) are deselected by default (`-m "not slow"` in `addopts`); run them with `pytest -m slow`. Test helpers (e.g. `tests/_enumerate.py`, the brute-force enumerator for Broda 2020) are importable because `tests` is on pytest's `pythonpath`. Property-based tests use `hypothesis` with a derandomized profile (`tests/conftest.py`). Doctests of a private module import its names from that module, not from `flanpy`: when pytest (importlib mode) collects a module alone, it executes it a second time, and the re-exported classes then differ. Public classes set `__module__ = "flanpy"`, which makes doctest's finder skip them, so each private module lists them in `__test__`.
 - **SPDX**: every `.py` file starts with `# SPDX-License-Identifier: GPL-3.0-or-later`.
 - **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 with the `fast` extra (flint backend) and on `3.x` without it (pure-Python backend; each job checks which backend it got), a `Slow tests` job (`pytest -m slow`, both entries) on every push and PR, plus a docs job (`sphinx-build -W` for HTML, executing the MyST-NB examples, then the `doctest` builder). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
 - **Repo files**: `README.md`, `CITATION.cff`, `CONTRIBUTING.md`, `docs/refs.bib` (DOIs checked against Crossref; arXiv-only entries against the arXiv API).
@@ -172,6 +186,7 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - [x] PyPI token: project-scoped token for `flanpy` in `~/.pypirc` `[pypi]` (done by Guilherme, 2026-10-29).
 - [x] Build-order step 1 (`system` + `series`): done 2026-10-29 (PR #1).
 - [x] Build-order step 2 (`kset`): done 2026-10-30 (PR #4).
+- [x] Build-order step 3 (`elimination`): done 2026-10-30 (PR #5).
 - Confirm the Broda 2020 eq. (5) erratum with the authors (see Decisions, step 1).
 - PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
 - Remaining technical risk: roots of characteristic polynomials that are not expressible in radicals (see Decisions), and Case I curves with larger systems, where the Groebner step may be slow. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.
