@@ -185,6 +185,25 @@ binary = singularity(eliminate(System({T: z + z * T**2}, z=z), T))
 print(binary.period, binary.unique)
 ```
 
+Another candidate on the circle need not be a singularity. Uniqueness is then proved
+from the structure of the system: if every recursive strongly connected component of
+the closure has period 1, $\rho$ is the only dominant singularity (Wielandt's theorem
+and the daffodil lemma; see the Notes of {func}`flanpy.singularity`). The rule looks
+at every component, so a periodic component anywhere leaves the question open. For
+$W = z^2 + T$, $W$ has period 1, but $T$'s component has period 2, and $W$ is indeed
+singular at $-1/2$:
+
+```{code-cell} python
+import warnings
+
+W = symbols("W")
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    two = singularity(eliminate(System({T: z + z * T**2, W: z**2 + T}, z=z), W))
+print(two.period, two.unique)
+print(caught[0].message)
+```
+
 Systems with a negative coefficient are refused: Pringsheim's theorem needs
 non-negative coefficients.
 
@@ -219,14 +238,17 @@ print(r_cases[1].rho == KRoot(1 - 2 * z - (7 + 8 * k) * z**2, 0, k=k))
 The pieces come from the real roots of finitely many polynomials in $k$, where the
 description might change. Each interval between them is decided by one exact analysis
 at an integer, and each integer root separately. Equal descriptions are merged. For
-$L_k$, $\rho_k$ is the positive root of $p_k$, eq. (18), in Case II, for every $k$.
-At $k = 108$, $p_{108} = 4(27z + 1)(972z^2 - 1)$, so $-\rho_{108}$ is also a root, and
-uniqueness is left undecided there (the warning is shown below):
+$L_k$, $\rho_k$ is the positive root of $p_k$, eq. (18), in Case II, and the only
+dominant singularity, for every $k$. At $k = 108$, $p_{108} = 4(27z + 1)(972z^2 - 1)$,
+so $-\rho_{108}$ is also a root and lies on the circle. It is not a singularity: the
+recursive components of $L_k$'s system, $\{B, \bar B\}$ and $\{M, \bar M\}$, have
+period 1.
 
 ```{code-cell} python
 l_cases = singularity_in_k(eliminate_in_k(ssnf, L))
 for piece, s in l_cases.pieces:
     print(piece, "|", s.rho, "| Case", s.case, "| unique:", s.unique)
+print(l_cases[108].specialize(108).rho)
 ```
 
 {meth}`Singularity.specialize <flanpy.Singularity.specialize>` gives the result at one

@@ -24,8 +24,8 @@
 #   $k \ge 1$), and the curves of $R_k$ (radicand of eq. (2)) and $S_k$.
 # - Step 4 (singularity): done, $\rho_k$ of $R_k$ (the positive root of $\Delta_k$,
 #   §3.1, Case I) and of $L_k$ (the positive root of $p_k$, §3.4, Case II) for every
-#   $k \ge 1$, $\rho_{54} = 2/45$; $F_k$ in Case I. Uniqueness on $|z| = \rho_k$ is
-#   proved for every $k$ except $k = 108$ (undecided, see below).
+#   $k \ge 1$, $\rho_{54} = 2/45$; $F_k$ in Case I. $\rho_k$ is the only singularity
+#   on $|z| = \rho_k$ for every $k$, including $k = 108$ (see below).
 # - Step 5 (Newton-Puiseux): $\alpha = 1/2$, eq. (32).
 # - Step 6 (transfer): eqs. (6)-(8) for $R_k$ and $S_k$.
 # - Step 7 (families in $k$): eqs. (35)-(38) and Table 1.
@@ -344,18 +344,14 @@ q_k = (
 res = resultant(G, diff(G, W), W)
 assert expand(res - k**3 * z**3 * p_k**2 * q_k**2) == 0
 start = time.perf_counter()
-with warnings.catch_warnings(record=True) as caught:
-    warnings.simplefilter("always", SingularityWarning)
+with warnings.catch_warnings():
+    warnings.simplefilter("error", SingularityWarning)  # uniqueness is decided
     l_sing = singularity_in_k(l_cases)
 print(f"singularity_in_k(L_k): {time.perf_counter() - start:.1f} s")
 print(l_sing)
-(generic, s_l), (exceptional, s_108) = l_sing.pieces
-assert generic == KSet([(1, 107), (109, None)]) and exceptional == KSet.of(108)
-assert s_l.rho == s_108.rho == KRoot(p_k, 0, k=k)
-assert s_l.case == s_108.case == "II" and s_l.unique is True and s_108.unique is None
-assert [str(w.message) for w in caught] == [
-    "uniqueness of the dominant singularity of L is undecided for k in {108}"
-]
+((piece, s_l),) = l_sing.pieces
+assert piece == KSet.all() and s_l.rho == KRoot(p_k, 0, k=k)
+assert s_l.case == "II" and s_l.period == 1 and s_l.unique is True
 
 # %% [markdown]
 # The positive root of $q_k$ is a candidate below $\rho_k$, but not a singularity of the
@@ -395,17 +391,31 @@ for n in (2, 10, 50):
 # generic piece.
 #
 # **$k = 108$**: $p_{108} = 4 (27z + 1)(972z^2 - 1)$, so $-\rho_{108}$ is also a root of
-# $p_{108}$ and lies on the circle $|z| = \rho_{108}$. flanpy's uniqueness test cannot
-# exclude it (the system of $L_k$ is not irreducible), so it leaves uniqueness
-# undecided at $k = 108$ and warns. The coefficients show no $(-1)^n$ term, so in truth
-# $\rho_{108}$ is unique; a proof for such systems is later work.
+# $p_{108}$ and lies on the circle $|z| = \rho_{108}$. It is not a singularity of
+# $L_{108}$. flanpy proves this from the structure of the system: its recursive
+# components, $\{B_k, \bar B_k\}$ (nonlinear) and $\{M_k, \bar M_k\}$ (linear), both
+# have period 1 (Wielandt and the daffodil lemma; see the Notes of
+# {func}`flanpy.singularity`). The coefficients agree: they show no $(-1)^n$ term.
+#
+# **Note on §3.4.** For $k > 54$ the paper argues that if $-\rho_k$ were a root, the
+# third root $\mu_k$ would satisfy $\mu_k = -9/(2k + 27) < 0$ and
+# $\mu_k = 1/(k(2k + 27)\rho_k^2) > 0$. In the text as we extracted it, the product of
+# the roots, $1/(k(2k + 27))$, gives $\mu_k = -1/(k(2k + 27)\rho_k^2) < 0$ instead,
+# with no contradiction, and $-\rho_k$ is a root exactly at $k = 108$. The conclusion
+# (uniqueness for every $k$) stands; to check against the printed text, then raise
+# with the authors.
 
 # %%
 at54 = s_l.specialize(54)
 assert at54.rho == Fraction(2, 45) and at54.rho.polynomial.as_expr() == 45 * z - 2
 assert expand(p_k.subs(k, 54) - 2 * (45 * z - 2) * (18 * z + 1) ** 2) == 0
 assert expand(p_k.subs(k, 108) - 4 * (27 * z + 1) * (972 * z**2 - 1)) == 0
-assert s_108.specialize(108).rho.polynomial.as_expr() == 972 * z**2 - 1
+at108 = s_l.specialize(108)
+assert at108.rho.polynomial.as_expr() == 972 * z**2 - 1 and at108.unique is True
+mu = Fraction(-1, 27)  # the third root of p_108
+assert (
+    mu == Fraction(-9, 2 * 108 + 27) == -1 / (108 * (2 * 108 + 27) * Fraction(1, 972))
+)
 with mpmath.workdps(30):
     c = series(ssnf, 400, k=108)[L]
     rho = 1 / mpmath.sqrt(972)
@@ -420,10 +430,10 @@ with mpmath.workdps(30):
 
 # %%
 with warnings.catch_warnings():
-    warnings.simplefilter("ignore", SingularityWarning)  # k = 108, as for L_k
+    warnings.simplefilter("error", SingularityWarning)
     f_sing = singularity_in_k(eliminate_in_k(fk, F))
-(f_generic, s_f), (f_exceptional, _) = f_sing.pieces
-assert f_generic == generic and f_exceptional == KSet.of(108)
+((f_piece, s_f),) = f_sing.pieces
+assert f_piece == KSet.all()
 assert s_f.rho == KRoot(p_k, 0, k=k) and s_f.case == "I" and s_f.unique is True
 assert s_f.a is not None and s_f.a.polynomial.degree(F) == 3
 print("F_k: a_k =", s_f.a)
