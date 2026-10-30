@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Tests for flanpy.AlgebraicReal and the root helpers of flanpy._algebraic.
+"""Tests for flanpy.AlgebraicReal, flanpy.KRoot and the root helpers of _algebraic.
 
 Design: dev/design/singularity.md, sections 2, 5.1 and 8 ("Algebraic reals").
 """
@@ -18,6 +18,7 @@ from hypothesis import strategies as st
 import flanpy
 from flanpy._algebraic import (
     AlgebraicReal,
+    KRoot,
     _negative,
     _OnCircle,
     _others_on_circle,
@@ -363,3 +364,107 @@ def test_circle_broda_lk_range() -> None:
     for n in range(1, 61):
         candidates, rho = candidates_of_lk(n)
         assert _others_on_circle(candidates, rho) == _OnCircle(True, []), n
+
+
+# -- KRoot -------------------------------------------------------------------------
+
+
+def test_kroot_exported() -> None:
+    assert "KRoot" in flanpy.__all__ and flanpy.KRoot is KRoot
+    assert KRoot.__module__ == "flanpy"
+
+
+def test_kroot_broda_rho_k() -> None:
+    rho = KRoot(P_K, 0, k=k)
+    assert rho.positive_index == 0
+    assert rho.polynomial == sp.Poly(P_K, z, k, domain=sp.ZZ)
+    assert rho.at(2) == AlgebraicReal(124 * z**3 + 36 * z**2 - z - 2, 0)
+    # p_54 = 2 (45z - 2)(18z + 1)^2: the minimal polynomial at 54 is a factor
+    assert rho.at(54) == Fraction(2, 45)
+    assert rho.at(54).polynomial.as_expr() == 45 * z - 2
+    # three real roots for k >= 55, one positive: still positive root 0
+    assert len(_real_roots(P_K.subs(k, 60))) == 3
+    assert rho.at(60) == _positive_roots(P_K.subs(k, 60))[0]
+
+
+def test_kroot_normalised_silently() -> None:
+    """Rational coefficients, sign and a content in Z[k] do not change the roots."""
+    base = KRoot(P_K, 0, k=k)
+    assert KRoot(-P_K / 6, 0, k=k) == base
+    assert KRoot(k * (k + 1) * P_K, 0, k=k) == base
+    assert KRoot(sp.Poly(P_K, z, k), 0, k=k) == base
+    assert KRoot(sp.Poly(P_K, k, z), 0, k=k) == base
+    # the names of the variables do not matter
+    x, m = sp.symbols("x m")
+    assert KRoot(P_K.subs({z: x, k: m}), 0, k=m) == base
+    assert hash(KRoot(P_K.subs({z: x, k: m}), 0, k=m)) == hash(base)
+    assert KRoot(P_K, 1, k=k) != base
+    # constant in k is allowed
+    assert KRoot(4 * z - 1, 0, k=k).at(7) == Fraction(1, 4)
+
+
+def test_kroot_validation() -> None:
+    with pytest.raises(TypeError, match="positive_index must be an int"):
+        KRoot(P_K, True, k=k)
+    with pytest.raises(TypeError, match="positive_index must be an int"):
+        KRoot(P_K, 0.0, k=k)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="positive_index must be >= 0"):
+        KRoot(P_K, -1, k=k)
+    with pytest.raises(TypeError, match=r"k must be a sympy\.Symbol"):
+        KRoot(P_K, 0, k="k")
+    with pytest.raises(ValueError, match="exactly one variable besides k"):
+        KRoot(k**2 - 2, 0, k=k)
+    with pytest.raises(ValueError, match="exactly one variable besides k"):
+        KRoot(z * w - k, 0, k=k)
+    with pytest.raises(ValueError, match="polynomial in z and k over Q"):
+        KRoot(z - 1 / k, 0, k=k)
+    with pytest.raises(ValueError, match="polynomial in z and k over Q"):
+        KRoot(z - sp.sqrt(2), 0, k=k)
+    with pytest.raises(ValueError, match="not irreducible over Q"):
+        KRoot((z - k) * (z + 1), 0, k=k)
+    with pytest.raises(ValueError, match="not irreducible over Q"):
+        KRoot((4 * z - 1) ** 2, 0, k=k)
+    with pytest.raises(TypeError, match="must be a polynomial"):
+        KRoot(object(), 0, k=k)
+
+
+def test_kroot_at_errors() -> None:
+    rho = KRoot(P_K, 0, k=k)
+    with pytest.raises(TypeError, match="k must be an int"):
+        rho.at(2.0)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="k must be an int"):
+        rho.at(True)
+    with pytest.raises(ValueError, match="k must be >= 1"):
+        rho.at(0)
+    with pytest.raises(ValueError, match="has 1 positive root"):
+        KRoot(P_K, 1, k=k).at(2)
+    with pytest.raises(ValueError, match="has 0 positive root"):
+        KRoot((k - 3) * z + 1, 0, k=k).at(3)  # the constant 1 at k = 3
+    with pytest.raises(ValueError, match="has 0 positive root"):
+        KRoot(z + k, 0, k=k).at(1)
+
+
+def test_kroot_value_semantics() -> None:
+    rho = KRoot(P_K, 0, k=k)
+    assert pickle.loads(pickle.dumps(rho)) == rho
+    assert {rho, KRoot(2 * P_K, 0, k=k)} == {rho}
+    assert rho != AlgebraicReal(4 * z - 1, 0) and rho != "rho"
+    assert repr(rho) == (
+        "KRoot(8*k**2*z**3 + 108*k*z**3 + 36*k*z**2 - k*z - 4, 0, k=k)"
+    )
+    assert (
+        str(rho) == "positive root 0 of 8*k**2*z**3 + 108*k*z**3 + 36*k*z**2 - k*z - 4"
+    )
+    with pytest.raises(AttributeError, match="immutable"):
+        rho._index = 1
+    with pytest.raises(AttributeError, match="immutable"):
+        del rho._index
+
+
+@pytest.mark.parametrize("n", range(1, 21))
+def test_kroot_against_mpmath(n: int) -> None:
+    """R_k of Broda 2020: the positive root of Δ_k, (sqrt(8 + 8k) - 1)/(7 + 8k)."""
+    rho = KRoot(1 - 2 * z - (7 + 8 * k) * z**2, 0, k=k).at(n)
+    with mpmath.workdps(50):
+        exact = (mpmath.sqrt(8 + 8 * n) - 1) / (7 + 8 * n)
+        assert abs(rho.evalf(50) - exact) < mpmath.mpf(10) ** -45

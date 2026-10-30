@@ -11,8 +11,8 @@ Pre-alpha: implemented so far are the input type :class:`System`, its power-seri
 coefficients (:func:`series`, :func:`series_in_k`), sets of alphabet sizes
 :class:`KSet` and piecewise results :class:`KCases`, elimination to a :class:`Curve`
 (:func:`eliminate`, :func:`eliminate_in_k`), exact real algebraic numbers
-(:class:`AlgebraicReal`), and the dominant singularity at a fixed ``k``
-(:func:`singularity`).
+(:class:`AlgebraicReal`, :class:`KRoot`), and the dominant singularity at a fixed
+``k`` (:func:`singularity`).
 
 Examples
 --------
@@ -24,7 +24,7 @@ True
 
 from importlib.metadata import version as _version
 
-from flanpy._algebraic import AlgebraicReal
+from flanpy._algebraic import AlgebraicReal, KRoot
 from flanpy._curve import Curve
 from flanpy._elimination import eliminate, eliminate_in_k
 from flanpy._kset import KCases, KSet
@@ -50,6 +50,7 @@ __all__ = [
     "Curve",
     "IllPosedSystemError",
     "KCases",
+    "KRoot",
     "KSet",
     "Singularity",
     "SingularityWarning",
