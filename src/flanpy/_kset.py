@@ -846,3 +846,8 @@ class KCases[T]:
 
 
 KCases.__module__ = "flanpy"
+
+
+# The public classes report "flanpy" as their module, so the doctest finder would
+# skip them; list them here so that pytest --doctest-modules runs their examples.
+__test__ = {"KSet": KSet, "KCases": KCases}

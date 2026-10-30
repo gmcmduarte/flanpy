@@ -854,3 +854,17 @@ def _support_cycle(jac: Any) -> list[int]:
         if state[start] == 0 and (found := dfs(start)) is not None:
             return found
     raise AssertionError("a non-nilpotent matrix has a cycle in its support graph")
+
+
+# The public classes report "flanpy" as their module, so the doctest finder would
+# skip them; list them here so that pytest --doctest-modules runs their examples.
+__test__ = {
+    cls.__name__: cls
+    for cls in (
+        System,
+        WellPosednessError,
+        IllPosedSystemError,
+        UndecidedSystemError,
+        ZeroCoordinateWarning,
+    )
+}
