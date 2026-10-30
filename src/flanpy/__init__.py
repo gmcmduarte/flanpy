@@ -10,8 +10,9 @@ possibly for families indexed by the alphabet size ``k``.
 Pre-alpha: implemented so far are the input type :class:`System`, its power-series
 coefficients (:func:`series`, :func:`series_in_k`), sets of alphabet sizes
 :class:`KSet` and piecewise results :class:`KCases`, elimination to a :class:`Curve`
-(:func:`eliminate`, :func:`eliminate_in_k`), and exact real algebraic numbers
-(:class:`AlgebraicReal`, the first part of singularity analysis).
+(:func:`eliminate`, :func:`eliminate_in_k`), exact real algebraic numbers
+(:class:`AlgebraicReal`), and the dominant singularity at a fixed ``k``
+(:func:`singularity`).
 
 Examples
 --------
@@ -28,6 +29,12 @@ from flanpy._curve import Curve
 from flanpy._elimination import eliminate, eliminate_in_k
 from flanpy._kset import KCases, KSet
 from flanpy._series import series, series_in_k
+from flanpy._singularity import (
+    Singularity,
+    SingularityWarning,
+    UndecidedSingularityError,
+    singularity,
+)
 from flanpy._system import (
     IllPosedSystemError,
     System,
@@ -44,7 +51,10 @@ __all__ = [
     "IllPosedSystemError",
     "KCases",
     "KSet",
+    "Singularity",
+    "SingularityWarning",
     "System",
+    "UndecidedSingularityError",
     "UndecidedSystemError",
     "WellPosednessError",
     "ZeroCoordinateWarning",
@@ -53,4 +63,5 @@ __all__ = [
     "eliminate_in_k",
     "series",
     "series_in_k",
+    "singularity",
 ]

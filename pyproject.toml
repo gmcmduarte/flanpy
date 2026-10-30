@@ -100,8 +100,9 @@ select = [
     "D",   # pydocstyle
 ]
 # KSet prints in set notation: [1, 53] ∪ [55, ∞) (RUF001-RUF003); the singularity
-# docstrings use the papers' notation ρ (radius) and σ (a candidate singularity).
-allowed-confusables = ["∪", "ρ", "σ"]
+# docstrings use the papers' notation ρ (radius), σ (a candidate singularity) and ℓ
+# (a lower bound, Pivoteau-Salvy 2025).
+allowed-confusables = ["∪", "ρ", "σ", "ℓ"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

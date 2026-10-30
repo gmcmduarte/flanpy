@@ -11,9 +11,9 @@ flanpy is pre-alpha. Only the input type {class}`flanpy.System`, its
 power-series coefficients ({func}`flanpy.series`, {func}`flanpy.series_in_k`),
 sets of alphabet sizes ({class}`flanpy.KSet`, {class}`flanpy.KCases`),
 elimination to one curve ({func}`flanpy.eliminate`, {func}`flanpy.eliminate_in_k`,
-{class}`flanpy.Curve`) and exact real algebraic numbers ({class}`flanpy.AlgebraicReal`,
-the first part of singularity analysis) are implemented so far, and the public API is
-not stable.
+{class}`flanpy.Curve`), exact real algebraic numbers ({class}`flanpy.AlgebraicReal`)
+and the dominant singularity at a fixed $k$ ({func}`flanpy.singularity`) are
+implemented so far, and the public API is not stable.
 ```
 
 ## Pipeline
@@ -100,6 +100,15 @@ $ pip install flanpy
 
 .. autoclass:: flanpy.AlgebraicReal
    :members: polynomial, index, interval, refine, sign, evalf, as_expr
+
+.. autofunction:: flanpy.singularity
+
+.. autoclass:: flanpy.Singularity
+   :members: curve, rho, case, a, period, unique, k, kset
+
+.. autoexception:: flanpy.UndecidedSingularityError
+
+.. autoexception:: flanpy.SingularityWarning
 ```
 
 Well-posedness of a {class}`~flanpy.System` follows
