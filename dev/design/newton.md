@@ -1,6 +1,6 @@
 # Design note: `newton`
 
-Status: draft (chunk 1), for approval. No code in `src/` yet.
+Status: approved 2026-10-30 (decisions in Section 11). Chunk 2 (`_field.py`) in progress.
 
 Build-order step 5. From a `Singularity` (step 4): the **local expansion** of the branch
 `w(z)` at its dominant singularity `ρ`. That means the exponent `α`, the ramification
@@ -93,7 +93,9 @@ Consequences for `w`:
 
 So **a cube-root or a `(3/2)`-type singularity in Case I cannot occur** for a series of
 our scope. The algorithm below does not rely on this. It is general Newton–Puiseux, and
-PS Thm 8.5 enters only as internal assertions (a violation is a bug, `RuntimeError`).
+PS Thm 8.5 enters only as a check: a test-suite property until chunk 3 re-checks PS's
+hypotheses against the printed proof for our scope, and only then an internal
+`RuntimeError` assertion (Q5). It never fails on user input before that.
 Exponents `1/3` and `3/2` (Case I) are therefore tested at the private curve level
 (Section 8), and `1/4` end to end.
 
@@ -260,8 +262,9 @@ special case. When they agree up to the `s^α` term (same `α` and `b`), the lea
 asymptotics coincide, but later terms do not, and the test still picks the right one.
 
 **Checks** (internal assertions): `n_W` equals the number of real branches at `(ρ, a)`
-(Case I) or with `V > 0` (Case II). The chosen branch satisfies the sign rule. In
-Case I, `γ = 1/2^m` and `b > 0` (Section 1.3). Spike: `n_W` matches on every example.
+(Case I) or with `V > 0` (Case II). The chosen branch satisfies the sign rule
+(`b > 0`, `c > 0`; proved in Section 3.2). `γ = 1/2^m` in Case I (Section 1.3) is a
+test-suite property until chunk 3 settles it (Q5). Spike: `n_W` matches on every example.
 Case II needs the sign filter: `W = Y^3` has 2 real branches, `V = ±s^{3/2}`, and 1
 sheet in the top window.
 
@@ -581,8 +584,9 @@ def local_expansion_in_k(
   `KRoot(h, j)` only, accepting the extra pieces of Section 6.1 (`L_k`: two pieces).
 - Errors: `TypeError` (not a `Singularity`), `ValueError` (wrong `k`, as step 4),
   `NotImplementedError` for the two documented gaps (`a_k ∉ Q(k)(ρ_k)` and first-level
-  ties, symbolic `k` only). No new exception class. A violated PS Thm 8.5 assertion is a
-  `RuntimeError` (a bug).
+  ties, symbolic `k` only), naming the piece's `KSet` and saying that fixed `k` works.
+  No new exception class. A violated sign rule is a `RuntimeError` (a bug); PS Thm 8.5
+  follows Q5.
 - Private: the polygon, the edge's `Φ`, the field `L` and the rank data stay private
   attributes (`_edge`, `_field`). Step 6 (transfer) and step 7 (families) use them
   inside the package. They become public only if users need them.
@@ -681,21 +685,12 @@ within 5% (aperiodic, `unique`).
 | 3 | `local_expansion` at fixed `k`: local problem, zero-test cascade, polygon, real branches, rank test (window data from step 4), Hensel lifting, Case II inversion, `LocalExpansion`; tests (all fixed-`k` examples, private curves, slow `n = 1000`); `catalan.py` step 5; guide part 1 | same branch |
 | 4 | `local_expansion_in_k`: `a_k = A(ρ_k)`, relative constants (Q2), `P5`, cuts, samples, merge; `L_k`/`F_k` acceptance; `broda2020.py` step 5; guide part 2; CLAUDE.md | same branch |
 
-## 11. Questions for approval
+## 11. Decisions (approved 2026-10-30)
 
-- **Q1 Names**: `local_expansion`, `local_expansion_in_k`, `LocalExpansion` with
-  `alpha`, `ramification`, `b`, `c`, `terms(n)`, `specialize`? (Alternatives:
-  `puiseux` / `newton`.)
-- **Q2 `b_k`, `c_k` for symbolic `k`**: (a) `KRoot(..., over=rho_k)` (recommended; `L_k`
-  one piece, the form step 7 needs), (b) a new class, or (c) absolute `KRoot` only
-  (`L_k` splits at 54/55; `F_k` cuts at 19.42 and 75.08)?
-- **Q3 Field**: `_NumberField` only, radicals as a step 7 display; the `_Field` protocol
-  kept for a later backend. Agreed?
-- **Q4 Gaps for symbolic `k`**: `a_k ∉ Q(k)(ρ_k)` and first-level ties raise
-  `NotImplementedError` naming the piece (fixed `k` handles both). Acceptable?
-- **Q5 Rank test always on** (the sign rule as an assertion), and PS Thm 8.5 as internal
-  assertions?
-- **Q6 Broda eqs. (37)–(38)**: worded as a sign convention ("`−b_k`; the result stands;
-  to confirm with the authors"), added to CLAUDE.md's open items? The eq. (27) reading
-  and the "minimum slope" remark as presentation notes only?
-- **Q7 Chunks** as in Section 10?
+- **Q1**: yes: `local_expansion`, `local_expansion_in_k`, `LocalExpansion` (`alpha`, `ramification`, `b`, `c`, `terms(n)`, `specialize`).
+- **Q2**: (a) `KRoot(..., over=rho_k)`; chunk 4 pins down the generators `(y, z, k)`, `positive_index` over the distinct positive roots of `Φ(·, ρ_k, k)` (`Φ` need not be irreducible), equality and hash, exact `at(n)` equal to the fixed-`k` `AlgebraicReal`, and `repr`.
+- **Q3**: yes: `_NumberField` only, behind the `_Field` protocol; radicals are a step 7 display question.
+- **Q4**: yes: `NotImplementedError` naming the piece (its `KSet`) and saying that fixed `k` works.
+- **Q5**: rank test always on; the sign rule (`b > 0`, `c > 0`) an assertion (proved, Section 3.2); `α = 1/2^m` (PS Thm 8.5) a `RuntimeError` assertion only after chunk 3 re-checks PS's hypotheses against the printed proof for our scope, a test-suite property until then (never a failure on user input).
+- **Q6**: (37)–(38) as a sign convention, in CLAUDE.md's open items; eq. (27) and "minimum slope" as presentation notes in this note only; Table 1's exact limits stay in Section 5.5 for the step 6–7 examples.
+- **Q7**: yes, chunks as in Section 10.
