@@ -1,6 +1,7 @@
 # Design note: `elimination`
 
-Status: draft for approval (chunk 1), 2026-10-30. No code in `src/` yet.
+Status: approved 2026-10-30 with amendments A–F (chunk 1, folded in; answers in
+Section 9); implemented in chunk 2.
 
 Build-order step 3. From a `System` `F = Phi(z, k, F)` (step 1) and one of its unknowns
 `w`, compute one algebraic equation `G(z, w, k) = 0` that the series `w(z)` satisfies,
@@ -35,12 +36,20 @@ element of the elimination ideal `I ∩ Q[w, z, k]`, where `I = (F_i − Phi_i)`
 
 Facts used later:
 
-- `G` is irreducible over `Q(k)` and in fact **absolutely irreducible** (over
-  `Q̄(k)(z)`). Proof: over `Q̄(k)(z)`, `w(z)` is a root of one irreducible factor `h` of
-  `G`. For `σ ∈ Gal(Q̄/Q)` acting on coefficients, `σ(h)` has the root `σ(w) = w`. `G`
-  is squarefree, so `σ(h) = h` up to a unit, for every `σ`. Hence `h` has coefficients
-  in `Q(k)(z)` and `h = G` up to a unit. Steps 4–5 rely on this (one curve, no
-  conjugate components).
+- `G` is irreducible over `Q(k)` and in fact **absolutely irreducible**: irreducible in
+  `K[z, w]`, where `K` is the algebraic closure of `Q(k)`. This is what Noether's
+  theorem (Section 2.5) needs. Proof: `G` has no factor in `K[z]` (its content in `z`
+  is the same over `Q(k)` and over `K`, and it is 1). Let `h ∈ K[z, w]` be an
+  irreducible factor with `h(z, w(z)) = 0` in `K[[z]]`. One exists because `K[[z]]` is a
+  domain. Normalise `h` so that one of its coefficients is 1. Each
+  `σ ∈ Aut(K/Q(k))` acts on coefficients and fixes `w(z)`, whose coefficients lie in
+  `Q[k]`. So `σ(h)` is an irreducible factor of `G` with the root `w(z)`. `G` is
+  squarefree (irreducible in characteristic 0), so if `σ(h)` and `h` were not
+  associates they would be coprime. Their resultant in `w`, a non-zero element of
+  `K[z]`, would then vanish at `w(z)` (Section 3.2's identity), which is impossible. So
+  `σ(h) = h` for every `σ`, and `h` has coefficients in the fixed field `Q(k)` (`K/Q(k)`
+  is Galois in characteristic 0). Hence `h = G` up to a unit. Steps 4–5 rely on this
+  too (one curve, no conjugate components).
 - **Annihilation holds at every `k`.** `G(z, w(z), k) = 0` in `Q[k][[z]]`, an identity
   between power series with polynomial coefficients in `k`. So
   `G(z, w_n(z), n) = 0` for every integer `n`, where `w_n` is the series of
@@ -81,11 +90,32 @@ class Curve:
     # __eq__, __hash__ (content-based), __repr__, __str__, immutable, picklable
 ```
 
-**Invariants** for every `n` in `kset` (and for the only value when `k` is `None`):
-`G(z, w_n, n) = 0`; `G(·, ·, n)` is primitive and squarefree, and its degree in `w` is
-`deg_w G` (`lc_w G(·, n) ≢ 0`). For symbolic `k`, `G` is irreducible over `Q(k)`. For a
-fixed `k` computed by `eliminate`, `G` is irreducible over `Q`, i.e. it is the minimal
-polynomial of `w_n`.
+**Invariants** for every `n` in `kset` (and for the only value when `k` is `None`),
+with `G_n = G(·, ·, n)`:
+
+- **annihilating**: `G_n(z, w_n(z)) = 0`;
+- **no content in `z`**: the coefficients of `G_n` in `w` have no common factor in
+  `Q[z]`;
+- **squarefree in `w`**;
+- **full `w`-degree**: `deg_w G_n = deg_w G` (`lc_w G(·, n) ≢ 0`).
+
+For symbolic `k`, `G` is also irreducible over `Q(k)`. For a fixed `k` computed by
+`eliminate`, `G` is irreducible over `Q`, i.e. it is the minimal polynomial of `w_n`.
+
+These invariants are about `G_n` up to a unit. The integer content and the sign
+convention of Section 1.3 can change at `n`: for example, `G_54` of `L_k` has integer
+content 2. So `Curve.specialize(n)` and the merge test of Section 2.4 renormalise
+`G_n` (Section 1.3 with `k` fixed) before comparing.
+
+**What guarantees them**: the candidate sets `X_deg`, `X_sqf` and `X_prim` of
+Section 2.3, together with recomputation at every candidate. Annihilation needs no
+condition (Section 1.2). Outside those three sets, the other three invariants hold by
+definition of the sets. At a candidate, either the recomputed curve equals the
+renormalised `G_n` with full degree (and then `G_n` is the minimal polynomial, which has
+all four properties), or the candidate gets its own piece. `X_GB` (Section 2.2) only
+adds recomputation points. It is cheap and is kept, so that "eliminate then substitute"
+agrees with "substitute then eliminate" outside the candidates, but no invariant
+depends on it.
 
 `kset` is redundant with the `KCases` piece that holds the curve. It stays on the curve
 so that step 4 can take a single `Curve` and return a `KCases` restricted to its `kset`.
@@ -185,14 +215,24 @@ with leading power product `X` in `x`. Its lex-leading term in `Q[x, k]` is
    gives the same ideal as substituting then eliminating.
 2. All of `𝒢` counts, not only `E`. `I ∩ R = 0` (the system is consistent for generic
    `k`), and `ker φ_n = (k − n)` is not an isolated prime of `0`. So Kalkbrener's
-   Thm 3.2 gives no stability for free, and a vanishing `lc` outside `E` can change the
-   specialised elimination ideal. Example: for `L_k`, `E` has the single `lc`
+   Thm 3.2 gives no stability for free, and a vanishing `lc` outside `E` can break the
+   Gröbner basis property. **At a candidate, the criterion is not used. The candidate is
+   decided by recomputing and comparing curves (Section 2.4).** The criterion's answer
+   is about the leading-monomial ideal. The question here is about one factor of the
+   elimination ideal, and the two can differ.
+
+   Example (spike, `kalkbrener_at`): for `L_k`, `E` has the single `lc`
    `4k^2 (2k + 27)`, but two other basis elements have `lc` `168 k (k − 54)` and
-   `6 (k − 54)(k + 2)`. So `k = 54` is a **candidate**. At `k = 54`, the criterion holds
-   (the two dropped elements reduce to 0, spike), and the recomputed curve equals
-   `G(·, ·, 54)`. `54` therefore ends up in the generic piece (Section 2.4).
+   `6 (k − 54)(k + 2)`. So `k = 54` is a candidate. Of the 20 basis elements, 18 keep
+   their `lc` at 54 and 2 are dropped. **The criterion fails**: the 2 dropped elements
+   are in `φ_54(I)` but do not reduce to 0 modulo the 18 kept ones. So the kept set
+   generates `φ_54(I)` but is not a Gröbner basis of it. Yet the elimination ideal of
+   the specialised system is still `(G(·, ·, 54))` (quotient `1/2`), the recomputed
+   curve equals the renormalised `G(·, ·, 54)`, and `54` merges into the generic piece
+   (Section 2.4).
 3. **Candidates from the basis**: `X_GB = {n >= 1 integer : lc(g)(n) = 0 for some
-   g ∈ 𝒢}`, a finite set: each `lc(g)` is a non-zero polynomial in `k`.
+   g ∈ 𝒢}`, a finite set: each `lc(g)` is a non-zero polynomial in `k`. Outside
+   `X_GB`, consequence 1 applies with no criterion to check.
 
 ### 2.3 Candidates from the curve
 
@@ -203,12 +243,46 @@ Section 1.4 is a separate question, decided on `G` itself:
   `lc_w G ∈ Z[k][z]`): there the degree in `w` drops;
 - `X_sqf`: integer roots `>= 1` of `cont_z(disc_w G)`: there `G(·, ·, n)` is not
   squarefree. If `deg_w G = 1`, this set is empty;
+- `X_prim`: the `n >= 1` where `G(·, ·, n)` gains a **content in `z`**, i.e. its
+  coefficients `a_0..a_d ∈ Z[k][z]` in `w` acquire a common factor in `Q[z]`. Then
+  `G(z0, w, n) = 0` identically for a root `z0` of that factor, which breaks `m_a` and
+  the local analysis in step 4. Computed exactly, without sampling:
+  1. If `G` has a single non-zero coefficient in `w`, then `G = w` (Section 1.1), and
+     `X_prim` is empty.
+  2. Let `p` be a non-zero coefficient of least `z`-degree. Let `q = Σ_j λ^j a_j` for
+     `λ = 1, 2, ...`, the first `λ` with `gcd(p, q) = 1` over `Q(k)`. Such a `λ` exists:
+     `gcd(a_0..a_d) = 1` over `Q(k)` (Section 1.3), so no root `ζ` of `p` is a root of
+     every `a_j`. Then `Σ_j λ^j a_j(ζ)` is a non-zero polynomial in `λ`, which vanishes
+     for at most `d` values of `λ`. So `gcd(p, q_λ)` is non-trivial for at most
+     `d · deg_z p` values of `λ`.
+  3. If `G(·, ·, n)` has a content in `z` with a root `z0`, then `p(z0, n) = 0` and
+     `q(z0, n) = 0`. So `n` is a root of `Res_z(p, q) ∈ Q[k]`, which is non-zero
+     because `p` and `q` are coprime of positive `z`-degree, or `n` is a root of
+     `lc_z(p)` or `lc_z(q)`, where the Sylvester matrix does not specialise. If
+     `deg_z p = 0`, then `p ∈ Q[k]`, and `n` must be a root of `p`.
+  4. Candidates are the integer roots `>= 1` of those polynomials. For each, test
+     `gcd_z(a_0(·, n), .., a_d(·, n))` exactly. `X_prim` is the set where it is
+     non-constant.
+
+  Counterexample to the rule without `X_prim` (spike):
+  `F = 2zF + z − 2z^2 + kzF^2 − 2z^2 F^2`, one unknown. `G = (2z^2 − kz) F^2 +
+  (1 − 2z) F + 2z^2 − z` is irreducible, `X_GB` is empty (no elimination), and
+  `cont_z lc_w G = cont_z disc_w G = 1`, so no other set flags anything. But
+  `G(·, ·, 1) = (2z − 1)(zF^2 − F + z)`, so `G(1/2, w, 1) = 0` identically. Steps 1–4
+  give candidates `{1}`, and the gcd at `k = 1` is `2z − 1`. The recomputed curve at
+  `k = 1` is `zF^2 − F + z`.
+
+  **With `X_prim`, `deg_w G = 1` is fully certified.** `G_n = a_1 w + a_0` is linear in
+  `w`, and with no content in `z` it is irreducible. So outside the candidates `G_n`
+  is the minimal polynomial of `w_n`, and Noether's finite set (Section 2.5) is empty.
 - `X_cont`: integer roots of the content in `k` of the unnormalised factor of `g0`
   (Section 1.3 divides it out). It is contained in `X_GB` (it divides `lc(g0)`), and
   is listed only so that the resultant path (Section 4) has the same rule.
 
-The candidates are `X = X_GB ∪ X_deg ∪ X_sqf ∪ X_cont`, computed exactly
-(`Poly.ground_roots` / `KSet.where(..., "==")`).
+The candidates are `X = X_GB ∪ X_deg ∪ X_sqf ∪ X_prim ∪ X_cont`, computed exactly
+(`Poly.ground_roots` / `KSet.where(..., "==")`). The invariants of Section 1.4 rest on
+`X_deg`, `X_sqf` and `X_prim` together with recomputation. `X_GB` and `X_cont` only add
+recomputation points.
 
 The spike's example of an exceptional `k` where the generic result fails, with
 `C = 1 + z C^2` (Catalan) and `W = z + (k − 1) z C^2`, which is non-negative:
@@ -225,7 +299,8 @@ For each candidate `n ∈ X`: `C_n = eliminate(system, w, k=n)` (substitute, the
 eliminate over `Q`, then select the factor with the series at `k = n`). Then:
 
 - **merge**: if `deg_w G(·, ·, n) = deg_w G` and `normalise(G(·, ·, n)) = C_n.polynomial`,
-  then `n` joins the generic piece;
+  then `n` joins the generic piece. `normalise` is Section 1.3 at fixed `k`: it removes
+  the integer content and fixes the sign, which can change at `n` (Section 1.4);
 - **otherwise** `n` gets its own piece `{n}` with value `C_n`.
 
 The result is `KCases({generic: Curve(G, kset=generic), {n}: C_n, ...})`, with
@@ -234,7 +309,8 @@ succeeds (`specialize` never fails on a well-posed system, `system.md` §5.7, an
 elimination at a fixed `k` always gives a curve). Nothing is dropped.
 
 Outcomes in the spike: `L_k`, `R_k`, `S_k` and Hitchhiker's Guide `A_k` give one piece
-`[1, ∞)` (`L_k`: candidate 54, merged). The two examples of Section 2.3 give
+`[1, ∞)` (`L_k`: candidate 54, merged even though Kalkbrener's criterion fails there).
+The three examples of Section 2.3 (squarefreeness, degree drop, content in `z`) each give
 `[2, ∞)` and `{1}`.
 
 Cost: one fixed-`k` elimination per candidate (`L_k` at `k = 54`: 0.07 s). Candidates
@@ -253,12 +329,12 @@ and nothing in steps 4–6 needs it. Step 4 must already discard candidate singu
 that are not singularities of the branch `w(z)`, and a reducible `G(·, ·, n)` only adds
 such candidates.
 
-Proposal: say this in the docstrings, and make `Curve.specialize(n)` exact. It
+Decision (approved): say this in the docstrings, and make `Curve.specialize(n)` exact. It
 substitutes `k = n`, factors over `Q`, selects the factor with the series at `n`
 (Section 3), and returns a curve whose polynomial is the minimal polynomial of `w_n`.
 That costs milliseconds for one `n`, so certification is available for any finite
 range on demand. Tests and examples spot-check `k = 1..N` this way (CLAUDE.md, Verify).
-See Question 2.
+If `deg_w G = 1`, the gap is empty (Section 2.3, `X_prim`).
 
 ## 3. Choosing the factor
 
@@ -305,13 +381,19 @@ fixed `k = n0` with `series(system, N, k=n0)` (rational arithmetic, fast up to
 `N = 1000`):
 
 - `g` always passes (annihilation holds at every `n0`, Section 1.2);
-- a wrong `h` passes at `n0` only if `n0` is a root of the (non-zero) leading
-  coefficient in `k` of `h(z, w(z))`. There are finitely many such roots.
+- for a wrong `h`, let `v <= N` be the order of `h(z, w(z)) ∈ Q[k][[z]]` and `c(k)` its
+  lowest-order non-zero `z`-coefficient, a non-zero polynomial in `k`. Substituting
+  `k = n0` commutes with forming `h(z, w(z))`: `h ∈ Q[k][z, w]` and
+  `w_{n0} = w(z)|_{k=n0}`. So the coefficients of `h(·, ·, n0)(z, w_{n0}(z))` below `v`
+  are 0, and the one at `v` is `c(n0)`. **A wrong `h` passes at `n0` only if
+  `c(n0) = 0`**, which happens for finitely many `n0`.
 
 So if exactly one candidate passes at `n0`, it is `g`. If several pass, retry with the
-next `n0`. Use `n0 = 2, 3, ...`, but not values where some `h_i(·, ·, n0)` drops degree
-in `w` or `z`, because the bound uses the generic degrees. Termination: all but
-finitely many `n0` succeed.
+next `n0` (`n0 = 2, 3, ...`). Termination: all but finitely many `n0` succeed. No
+`n0` has to be excluded for degree drops. The bound `N` is a property of the generic
+`h` and `g` over `Q(k)`, and evaluating at `n0` is only used through the identity
+above, which holds at every `n0`. If `h(·, ·, n0)` drops degree, it may pass or fail;
+passing just causes a retry.
 
 Spike: `F = kz + zG^2`, `G = kz + zF^2` (symmetric, so `F = G`). The eliminant is
 `(zF^2 − F + kz)(z^2 F^2 + zF + kz^2 + 1)`, `N = 6`, and the first factor is selected.
@@ -419,9 +501,12 @@ class _GroebnerBackend(Protocol):
 - `F_k = z + B_k + B̄_k` (eq. (38)'s denominator): a cubic, no exceptional `k`
   (`cont_z disc = 16k`).
 
-**Exceptional `k`:** the two examples of Section 2.3 give `[2, ∞)` and `{1}`, with the
-values stated there. A test also checks that the generic `G(·, ·, 1)` is **not** the
-curve at `k = 1` (not squarefree / lower degree), so the split is necessary.
+**Exceptional `k`:** the three examples of Section 2.3 (squarefreeness, degree drop,
+content in `z`) each give `[2, ∞)` and `{1}`, with the values stated there. A test
+also checks that the generic `G(·, ·, 1)` is **not** the curve at `k = 1` (not
+squarefree / lower degree / content `2z − 1`), so the split is necessary. `X_prim` is
+tested directly: candidates `{1}` and content `2z − 1` for the counterexample, and empty
+for `L_k` and the other examples.
 
 **Factor selection:** the symmetric example (`N = 6`, the right factor, the same with
 both methods). A test where the fixed-`n0` test must retry: a constructed factor `h`
@@ -431,8 +516,10 @@ guard check when `r = 1`.
 **Saturation fallback:** the `(1 − zG)` example: `E` is empty, saturation gives
 `F − z`.
 
-**Specialisation theorem:** for `L_k` at `k = 54`, the dropped basis elements reduce to
-0 (Kalkbrener Thm 3.1(c)), checked directly in a test of the private helper.
+**Specialisation theorem:** for `L_k` at `k = 54`, **the criterion fails** (the 2
+dropped elements do not reduce to 0 modulo the 18 kept ones, Kalkbrener Thm 3.1(c)),
+**and the curve merges** (the recomputed curve equals the renormalised `G(·, ·, 54)`).
+Both are checked in one test of the private helpers.
 
 **Properties (`hypothesis`):** random small non-negative systems (two or three unknowns,
 degree `<= 2`, coefficients in `{0, 1, k}`), well-posed by construction (each term has
@@ -490,21 +577,19 @@ test is not added (CI timing is noisy). The examples print the time.
   `elimination/` package entry removed), a "Step 3" block under Decisions, the 1.4 s
   figure labelled as pure Python with the flint figure added, and the open item ticked.
 
-## 9. Questions for approval
+## 9. Decisions (approved 2026-10-30)
 
-1. **API names and shape**: `eliminate` / `eliminate_in_k` (mirroring `series` /
-   `series_in_k`), `Curve` with `polynomial`, `w`, `z`, `k`, `kset`, `system`, and
-   `method="auto"`. OK?
-2. **Irreducibility at non-candidate `k`** (Section 2.5): document that `G(·, ·, n)` is
-   certified squarefree, of full degree and annihilating, but irreducible only
-   generically. Per-`n` certification is available through `Curve.specialize(n)`, and
-   tests and examples spot-check ranges. The alternative, a bounded certification at
-   construction (`eliminate_in_k(..., certify=range(1, N))`), would add API for little
-   gain. Accept the documented gap?
-3. **Merge rule** (Section 2.4): candidates whose recomputed curve equals the
-   specialised generic one are folded into the generic piece, so `L_k` is one piece
-   `[1, ∞)`, not `[1, 53] ∪ [55, ∞)` plus `{54}`. A degree drop always stays separate.
-   OK?
-4. **`KCases` public, plus `tail`** (Section 6). OK?
-5. **Saturation fallback** implemented in chunk 2 (small, and it has a test case),
-   rather than raising an error when the elimination ideal is empty. OK?
+1. API: `eliminate` / `eliminate_in_k`, and `Curve` with `polynomial`, `w`, `z`, `k`,
+   `kset`, `system`, plus `method="auto"`.
+2. Irreducibility at non-candidate `k` is a documented gap (Section 2.5), with exact
+   per-`n` certification through `Curve.specialize`. Amendment B added `X_prim`, which
+   closes the gap for `deg_w G = 1`.
+3. Merge rule as in Section 2.4, with renormalisation (amendment E).
+4. `KCases` is public, with `tail`.
+5. The saturation fallback is implemented.
+
+Amendments folded in: A (Section 2.2: the criterion fails at 54, and candidates are
+decided by recomputation), B (`X_prim`, Section 2.3), C (what the invariants rest on,
+Section 1.4), D (absolute irreducibility over the algebraic closure of `Q(k)`,
+Section 1.2), E (invariants up to a unit; renormalise, Section 1.4), F (the coefficient
+`c(k)`; no `n0` exclusion, Section 3.2).

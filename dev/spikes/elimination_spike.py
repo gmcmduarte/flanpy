@@ -165,7 +165,54 @@ def resultant_path(name, system, w, other):
     print(f"  resultant {dt:.3f} s:", sp.factor(r))
 
 
-cases = sys.argv[1:] or ["catalan", "hg", "rs", "sym", "exc", "sat", "lk"]
+def x_prim(G, w, z, k):
+    """Integer n >= 1 where G(., ., n) has a content in z (common factor of its
+    coefficients in w). Exact: candidates from Res_z(p, q) of two coefficient
+    combinations coprime over Q(k), plus z-degree drops; each tested by a gcd."""
+    a = [c for c in Poly(G, w).all_coeffs() if c != 0]
+    if len(a) == 1:
+        return [], []
+    p = min(a, key=lambda c: Poly(c, z).degree())
+    lam = 1
+    while True:
+        q = sum(lam**j * c for j, c in enumerate(a))
+        if sp.gcd(Poly(p, z, domain=QQ.frac_field(k)), Poly(q, z, domain=QQ.frac_field(k))).degree() == 0:
+            break
+        lam += 1
+    pp, qq = Poly(p, z, domain=QQ[k]), Poly(q, z, domain=QQ[k])
+    if pp.degree() == 0:
+        polys = [pp.LC().as_expr()]
+    else:
+        polys = [sp.resultant(p, q, z), pp.LC().as_expr(), qq.LC().as_expr()]
+    cands = set()
+    for e in polys:
+        e = sp.expand(e)
+        if not e.is_number:
+            cands |= {r for r in sp.roots(Poly(e, k), filter="Z") if r >= 1}
+    hits = []
+    for n in sorted(cands):
+        g = 0
+        for c in a:
+            g = sp.gcd(g, sp.expand(c.subs(k, n)))
+        if sp.Poly(g, z).degree() > 0:
+            hits.append((n, sp.factor(g)))
+    return sorted(cands), hits
+
+
+def kalkbrener_at(polys, others, w, z, k, n):
+    """Kalkbrener 1997 Thm 3.1(c) at k = n, and whether the kept elements generate phi(I)."""
+    main = [*others, w, z]
+    gb = sp.groebner(polys, *main, k, order="lex", method="f5b")
+    keep = [g.subs(k, n) for g in gb.exprs if lc_main(g, main, k).subs(k, n) != 0]
+    drop = [g.subs(k, n) for g in gb.exprs if lc_main(g, main, k).subs(k, n) == 0]
+    crit = all(sp.reduced(d, keep, *main, order="lex")[1] == 0 for d in drop)
+    spec = sp.groebner([p.subs(k, n) for p in polys], *main, order="lex")
+    gen = sp.groebner(keep, *main, order="lex").exprs == spec.exprs
+    E = [g for g in spec.exprs if not g.has(*others)]
+    return len(gb.exprs), len(keep), len(drop), crit, gen, E
+
+
+cases = sys.argv[1:] or ["catalan", "hg", "rs", "sym", "exc", "prim", "sat", "lk"]
 F, G_, C, W, A, Bk = symbols("F G C W A B")
 if "catalan" in cases:
     run("Catalan", System({F: 1 + z * F**2}, z=z), F)
@@ -189,6 +236,13 @@ if "exc" in cases:
     run("loses squarefreeness: W = z + (k-1) z C^2", exc, W)
     run("  ... at k = 1", exc.specialize(1), W)
     run("  ... at k = 2", exc.specialize(2), W)
+if "prim" in cases:
+    prim = System({F: 2 * z * F + z - 2 * z**2 + k * z * F**2 - 2 * z**2 * F**2}, z=z, k=k)
+    Gp = run("content in z at k = 1: F = 2zF + z - 2z^2 + kzF^2 - 2z^2F^2", prim, F)
+    print("  G(.,.,1) =", sp.factor(Gp.as_expr().subs(k, 1)))
+    print("  X_prim candidates, hits:", x_prim(Gp.as_expr(), F, z, k))
+    run("  ... at k = 1", prim.specialize(1), F)
+    print("  X_prim for the exc example (expect none):", x_prim((F**2 * k * z - F**2 * z - F + 1), F, z, k))
 if "sat" in cases:
     import warnings
 
@@ -219,6 +273,12 @@ if "lk" in cases:
     eq17 = pk * w**3 + k * z * ((k + 12) * k * z**2 + 4 * k * z + 1) * w - k**2 * z**2 * (2 * z + 1)
     q = sp.cancel(Gl.as_expr() / eq17)
     print("  G / eq.(17) =", q)
+    print("  X_prim:", x_prim(Gl.as_expr(), L, z, k))
+    P = [p.as_expr() for p in ssnf.polynomials()]
+    nb, nk, nd, crit, gen, E = kalkbrener_at(P, [B, Bb, M, Mb], L, z, k, 54)
+    print(f"  k = 54: {nb} basis elements, {nk} kept, {nd} dropped; Kalkbrener Thm 3.1(c) holds: {crit}")
+    print(f"  k = 54: kept elements generate phi(I): {gen}; elimination ideal / G(.,.,54):",
+          [sp.cancel(e / Gl.as_expr().subs(k, 54)) for e in E])
     for n in (1, 2, 54):
         t = time.perf_counter()
         run(f"L_k at k = {n}", ssnf.specialize(n), L, show=False)
