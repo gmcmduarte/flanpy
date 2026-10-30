@@ -26,7 +26,9 @@
 #   §3.1, Case I) and of $L_k$ (the positive root of $p_k$, §3.4, Case II) for every
 #   $k \ge 1$, $\rho_{54} = 2/45$; $F_k$ in Case I. $\rho_k$ is the only singularity
 #   on $|z| = \rho_k$ for every $k$, including $k = 108$ (see below).
-# - Step 5 (Newton-Puiseux): $\alpha = 1/2$, eq. (32).
+# - Step 5 (Newton-Puiseux): done, $\alpha = 1/2$ for $R_k$, $L_k$ (eq. (32)) and $F_k$
+#   for every $k \ge 1$; $b_k$ of $R_k$ (§3.1), $c_k$ of $L_k$ (eq. (34)) and $b_k$ of
+#   $F_k$ exactly, one piece $[1, \infty)$ each; the sign of eq. (37) (see below).
 # - Step 6 (transfer): eqs. (6)-(8) for $R_k$ and $S_k$.
 # - Step 7 (families in $k$): eqs. (35)-(38) and Table 1.
 
@@ -57,6 +59,8 @@ from flanpy import (
     System,
     eliminate,
     eliminate_in_k,
+    local_expansion,
+    local_expansion_in_k,
     series,
     series_in_k,
     singularity,
@@ -438,3 +442,88 @@ assert s_f.rho == KRoot(p_k, 0, k=k) and s_f.case == "I" and s_f.unique is True
 assert s_f.a is not None and s_f.a.polynomial.degree(F) == 3
 print("F_k: a_k =", s_f.a)
 print("F_2:", singularity(eliminate(fk, F, k=2)))
+
+# %% [markdown]
+# ## Step 5: the local expansion
+#
+# {func}`flanpy.local_expansion_in_k` expands each series at $\rho_k$ in powers of
+# $s = 1 - z/\rho_k$ (eqs. (20)-(31)). The exponent $\alpha$ comes from the Newton
+# polygon, and the constant ($b_k$ in Case I, $c_k$ in Case II) is a
+# {class}`flanpy.KRoot` *relative to* $\rho_k$: "the positive root of
+# $\Phi(y, \rho_k, k)$" (`over=rho_k`).
+#
+# ### $R_k$
+#
+# §3.1 (p. 7): $R_k \sim -\frac{\sqrt{2 - 2\rho_k}}{4\rho_k} (1 - z/\rho_k)^{1/2}$, so
+# $\alpha = 1/2$ and $b_k = \sqrt{2 - 2\rho_k}/(4\rho_k)$.
+
+# %%
+r_local = local_expansion_in_k(r_sing)
+((piece, e_r),) = r_local.pieces
+print(piece, e_r)
+assert piece == KSet.all() and e_r.alpha == Fraction(1, 2) and e_r.ramification == 2
+assert e_r.b is not None
+for n in (1, 2, 10, 50):
+    with mpmath.workdps(50):
+        rho_n = e_r.singularity.rho.at(n).evalf(50)
+        closed = mpmath.sqrt(2 - 2 * rho_n) / (4 * rho_n)
+        assert abs(e_r.b.at(n).evalf(50) - closed) < mpmath.mpf(10) ** -45
+
+# %% [markdown]
+# ### $L_k$: eqs. (32)-(34)
+#
+# $L_k$ is in Case II: $1/L_k = c_k s^{1/2} + \dots$, with $\alpha = 1/2$ from the
+# Newton polygon of eq. (32), a single edge, and $c_k = \sqrt{2\rho_k H_z / H_{vv}}$ at
+# $(\rho_k, 0)$ (eqs. (33)-(34)). flanpy finds one piece $[1, \infty)$, and $c_k$ is the
+# positive root of $((k^2 + 12k)\rho_k^2 + 4k\rho_k + 1)\, y^2 -
+# ((24k + 324)\rho_k^2 + 72\rho_k - 1)$, which is eq. (34) with
+# $H_z = -p_k'(\rho_k)$. The cut $k = 54$ (where $p_{54}$ has a double root) is checked
+# separately and merges; $c_{54} = \sqrt{15}/7$. The limit $c_k \sim 4 k^{-1/2}$
+# (eq. (36)) is step 7.
+
+# %%
+l_local = local_expansion_in_k(l_sing)
+((piece, e_l),) = l_local.pieces
+assert piece == KSet.all() and e_l.singularity.case == "II"
+assert e_l.alpha == Fraction(1, 2) and e_l.ramification == 2 and e_l.c is not None
+y = symbols("y")
+eq34 = ((k**2 + 12 * k) * z**2 + 4 * k * z + 1) * y**2 - (
+    (24 * k + 324) * z**2 + 72 * z - 1
+)
+assert e_l.c == KRoot(eq34, 0, k=k, over=KRoot(p_k, 0, k=k))
+for n in (2, 10, 50, 54, 108):
+    c_n = e_l.c.at(n)
+    with mpmath.workdps(50):
+        r, kk = e_l.singularity.rho.at(n).evalf(50), mpmath.mpf(n)
+        p_prime = 12 * kk * (2 * kk + 27) * r**2 + 72 * kk * r - kk
+        h_vv = 2 * kk * r * ((kk + 12) * kk * r**2 + 4 * kk * r + 1)
+        assert abs(c_n.evalf(50) - mpmath.sqrt(2 * r * p_prime / h_vv)) < 1e-40
+        ratio = c_n.evalf(30) * mpmath.sqrt(kk) / 4
+    value = mpmath.nstr(c_n.evalf(20), 15)
+    print(f"k = {n}: c_k = {value}, c_k sqrt(k)/4 = {mpmath.nstr(ratio, 4)}")
+assert e_l.c.at(54).polynomial.as_expr() == 49 * y**2 - 15
+
+# %% [markdown]
+# ### $F_k$: eq. (37) and a sign
+#
+# $F_k$ is in Case I with $\alpha = 1/2$ (eq. (37)); flanpy finds one piece and $b_k$
+# exactly, relative to $\rho_k$. Eq. (20) writes $w = a - g(s) s^\alpha$ with
+# $b = g(0)$, and $w$ increases to $a$, so $b_k > 0$; flanpy finds
+# $b_k / \sqrt{k} \to 1$. So $|b_k| \sim k^{1/2}$ as eq. (37) says, but eq. (37) prints
+# $b_k = -k^{1/2} + o(k^{1/2})$, and eq. (38) writes the ratio as $-2/(b_k c_k)$: both
+# use $-b_k$ (the constant $\lambda$ of Thm 3.1) relative to eq. (20)'s $b$. The limit
+# $1/2$ of eq. (38) is unaffected. To check against the printed eqs. (20), (37), (38),
+# then raise with the authors.
+
+# %%
+f_local = local_expansion_in_k(f_sing)
+((piece, e_f),) = f_local.pieces
+assert piece == KSet.all() and e_f.alpha == Fraction(1, 2) and e_f.b is not None
+assert e_f.b.over == KRoot(p_k, 0, k=k)
+for n in (2, 10, 50, 108):
+    b_n = e_f.b.at(n)
+    assert b_n > 0 and b_n == local_expansion(s_f.specialize(n)).b
+    print(
+        f"k = {n}: b_k = {mpmath.nstr(b_n.evalf(20), 15)}, b_k/sqrt(k) = "
+        f"{mpmath.nstr(b_n.evalf(20) / mpmath.sqrt(n), 6)}"
+    )

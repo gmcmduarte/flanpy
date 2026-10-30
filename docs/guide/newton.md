@@ -155,16 +155,51 @@ print(mpmath.nstr(mpmath.sqrt(2 * (1 + tau**2 + tau**5) / (2 + 20 * tau**3)), 20
 
 ## Symbolic $k$
 
-A piece of {func}`flanpy.singularity_in_k` is expanded at one $k$ with `k=`:
+{func}`flanpy.local_expansion_in_k` works on the pieces of
+{func}`flanpy.singularity_in_k`. On each piece, $\alpha$ and $\kappa$ are constant, and
+the constant is a {class}`flanpy.KRoot` **relative to** $\rho_k$: "the $j$-th positive
+root of $\Phi(y, \rho_k, k)$" (`over=rho_k`). For Broda's $L_k$ this is eq. (34), for
+every $k \ge 1$ at once:
 
 ```{code-cell} python
-from flanpy import eliminate_in_k, singularity_in_k
+from flanpy import KRoot, eliminate_in_k, local_expansion_in_k, singularity_in_k
 
-R = symbols("R")
-rk = System({R: (k + 1) * z + 2 * z * R**2 + z * R}, z=z, k=k)
-piece = singularity_in_k(eliminate_in_k(rk, R))[2]
-print(local_expansion(piece, k=2))
+cases = local_expansion_in_k(singularity_in_k(eliminate_in_k(ssnf, L)))
+((piece, e),) = cases.pieces
+print(piece, e.alpha, e.ramification)
+print(e.c.polynomial.as_expr())
+print(e.c.over)
+print(e.c.at(2), e.c.at(54))
 ```
 
-Expansions for every $k$ at once ($b_k$ and $c_k$ described on pieces of $k$) come with
-the next part of this step.
+A description relative to $\rho_k$ only changes where something happens *at*
+$\rho_k$. The absolute alternative, a root of the norm of $\Phi$ over all the
+conjugates of $\rho_k$, changes its positive index between $k = 54$ and $k = 55$: for
+$k \ge 55$ the other two real roots of $p_k$ are negative and add a positive root
+below $c_k$.
+
+The pieces come from the real roots of a finite set of polynomials in $k$ (the Notes
+of {func}`flanpy.local_expansion_in_k`): step 4's projection set, and the places where
+the Newton polygon can change. Every integer root is checked exactly and merges when
+the description holds there. For $L_k$ these are 54 and 108, and both merge.
+
+Within one piece of step 4, the local expansion can still change. Take
+$K = kU/4 + K^2$ with $U = z + U^2$. At $k = 2$, $kU/4$ reaches the critical value
+$1/4$ exactly at the singularity of $U$, and $K = (1 - s^{1/4})/2$. For $k \ge 3$ it
+reaches it earlier, and $K$ has its own square-root singularity. Step 4 has the pieces
+$\{1\}$ and $[2, \infty)$, and step 5 splits $k = 2$ off. There $a_2$ becomes a
+four-fold root of $G(\rho_2, \cdot)$, and the vertex $(2, 0)$ of the Newton polygon,
+$\partial^2 G/\partial w^2 (\rho_k, a_k)$, vanishes:
+
+```{code-cell} python
+U, K = symbols("U K")
+uk = System({U: z + U**2, K: k * U / 4 + K**2}, z=z, k=k)
+steps = singularity_in_k(eliminate_in_k(uk, K))
+print([str(part) for part, _ in steps.pieces])
+for part, e in local_expansion_in_k(steps).pieces:
+    print(part, e.alpha, e.ramification, e.b)
+```
+
+Each piece agrees with the fixed-$k$ expansion: `cases[n].specialize(n)` is
+`local_expansion(..., k=n)`. Expansions in powers of $1/k$ ($\rho_k$, $c_k$ as
+$k \to \infty$, eqs. (35)-(36)) are step 7.
