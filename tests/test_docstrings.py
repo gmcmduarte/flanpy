@@ -18,6 +18,9 @@ ALLOWLIST = {
     "flanpy.__version__": "a string, not a callable; it has no docstring of its own",
     "flanpy.System.z": "returns the constructor's z unchanged",
     "flanpy.System.k": "returns the constructor's k (or None) unchanged",
+    "flanpy.Curve.w": "returns the unknown passed to eliminate unchanged",
+    "flanpy.Curve.z": "returns the system's z unchanged",
+    "flanpy.Curve.k": "returns the system's k (or None) unchanged",
 }
 
 
