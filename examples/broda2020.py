@@ -18,8 +18,8 @@
 # **Status**
 #
 # - Step 1 (`System`, `series`): done, the coefficients of $R_k$, $S_k$, $L_k$ below.
-# - Step 2 (`KSet`): conditions on $k$, e.g. the discriminant $32 k^2 (k - 54)^3$ of
-#   $p_k$, eq. (18).
+# - Step 2 (`KSet`): done, the sets of $k$ where the discriminant $32 k^2 (k - 54)^3$
+#   of $p_k$, eq. (18), is negative, zero and positive.
 # - Step 3 (elimination): eqs. (17)-(18) for $L_k$, computed from the system.
 # - Step 4 (singularity): $\rho_k$, $a_k$, and the Case I / Case II decision.
 # - Step 5 (Newton-Puiseux): $\alpha = 1/2$, eq. (32).
@@ -30,9 +30,9 @@
 from fractions import Fraction
 from math import comb, factorial
 
-from sympy import symbols
+from sympy import diff, discriminant, expand, factor, resultant, sqf_part, symbols
 
-from flanpy import System, series, series_in_k
+from flanpy import KSet, System, series, series_in_k
 
 z, k = symbols("z k")
 R, S = symbols("R S")
@@ -149,3 +149,44 @@ r = [0, 0, K**2, 2 * K**2] + [0] * (N - 3)
 cube = times(w, times(w, w))
 lhs = [a + b - c for a, b, c in zip(times(p, cube), times(q, w), r, strict=True)]
 assert lhs == [0] * (N + 1)
+
+# %% [markdown]
+# ## Step 2: conditions on $k$
+#
+# The discriminant of $p_k$ in $z$ is $32 k^2 (k - 54)^3$, eq. (18).
+# {meth}`KSet.where <flanpy.KSet.where>` gives the sets of $k \ge 1$ where it is
+# negative, zero and positive; the root $k = 0$ lies outside the domain.
+
+# %%
+p_k = 4 * k * (2 * k + 27) * z**3 + 36 * k * z**2 - k * z - 4  # eq. (18)
+disc = discriminant(p_k, z)
+assert factor(disc) == 32 * k**2 * (k - 54) ** 3
+negative, zero, positive = (KSet.where(disc, rel, k=k) for rel in ("<", "==", ">"))
+assert negative == KSet([(1, 53)])
+assert zero == KSet.of(54)
+assert positive == KSet([(55, None)])
+print("disc p_k < 0:", negative)
+print("disc p_k = 0:", zero)
+print("disc p_k > 0:", positive)
+
+# %% [markdown]
+# A sign can also change between two integers. **Derived by us, not printed in the
+# paper:** let $D$ be the discriminant in $z$ of the squarefree part of
+# $\operatorname{res}_w(G, \partial G / \partial w)$, for the curve $G$ of eq. (17).
+# $D$ has the factor $k^2 - 34 k - 54$, whose root $17 + 7 \sqrt 7 \approx 35.52$ is
+# not an integer, so the sign of $D$ changes between $k = 35$ and $k = 36$.
+
+# %%
+W = symbols("w")
+G = expand(
+    p_k * W**3
+    + k * z * ((k + 12) * k * z**2 + 4 * k * z + 1) * W
+    - k**2 * z**2 * (2 * z + 1)
+)  # eq. (17)
+D = discriminant(sqf_part(resultant(G, diff(G, W), W)), z)
+print("D =", factor(D))
+assert KSet.where(D, ">", k=k) == KSet([(1, 35), (55, None)])
+assert KSet.where(D, "<", k=k) == KSet([(36, 53)])
+assert KSet.where(D, "==", k=k) == KSet.of(54)
+print("D > 0:", KSet.where(D, ">", k=k))
+print("D < 0:", KSet.where(D, "<", k=k))

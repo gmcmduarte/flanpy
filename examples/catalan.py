@@ -22,7 +22,8 @@
 # - Step 4 (singularity): $\rho = 1/4$, $a = F(\rho) = 2$.
 # - Step 5 (Newton-Puiseux): $\alpha = 1/2$ in $F = 2 - 2 (1 - 4z)^{1/2} + \dots$
 # - Step 6 (transfer): $[z^n] F \sim 4^n n^{-3/2} / \sqrt{\pi}$.
-# - Steps 2 and 7 concern the parameter $k$ and do not apply.
+# - Step 2 (`KSet`): does not apply, there is no parameter (see below).
+# - Step 7 (families in $k$): does not apply, there is no parameter.
 
 # %% [markdown]
 # ## Step 1: the system and its coefficients
@@ -44,3 +45,10 @@ catalan = System({F: 1 + z * F**2}, z=z)
 coefficients = series(catalan, 15)[F]
 assert coefficients == tuple(comb(2 * n, n) // (n + 1) for n in range(16))
 print(coefficients)
+
+# %% [markdown]
+# ## Step 2: conditions on $k$
+#
+# Catalan's equation has no parameter, so every result holds unconditionally and a
+# {class}`flanpy.KSet` is not needed. The Broda 2020 example shows the sets of $k$ on
+# which a discriminant is negative, zero and positive.
