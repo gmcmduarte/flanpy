@@ -20,7 +20,7 @@ Reference papers (in Guilherme's Zotero library):
 - Broda, Machiavelo, Moreira, Reis, *A Hitchhiker's Guide to descriptional complexity through analytic combinatorics* (TCS 528, 2014) — simpler curves with square-root singularities and cost generating functions.
 - Flajolet & Sedgewick, *Analytic Combinatorics* (2008) — the general theory (Thm VI.1 and Cor. VI.1, Pringsheim IV.6, algebraic coefficient asymptotics).
 - Pivoteau, Salvy, Soria, *Algorithms for combinatorial structures: Well-founded systems and Newton iterations* (JCTA 119, 2012; arXiv:1109.2688) — well-founded systems and Newton iteration; used by step 1 (cited with arXiv v2 numbering).
-- Pivoteau, Salvy, *Effective Asymptotics of Combinatorial Systems* (arXiv:2508.20008, 2025) — relevant to steps 4–6 (singularity, Newton–Puiseux, transfer); not read yet.
+- Pivoteau, Salvy, *Effective Asymptotics of Combinatorial Systems* (arXiv:2508.20008, 2025) — relevant to steps 4–6 (singularity, Newton–Puiseux, transfer); read for steps 4 and 5 (§§3–8; cited with arXiv v1 numbering).
 
 ## Decisions
 
@@ -85,6 +85,9 @@ Reference papers (in Guilherme's Zotero library):
 
 ## Planned layout
 
+Flat private modules (`_name.py`), re-exported from `flanpy`, as in steps 1–4; a
+subpackage only where a design note argues for one.
+
 ```
 src/flanpy/
   _system.py     System (F = Phi(z, k, F)) and its well-posedness check; re-exported from flanpy
@@ -97,17 +100,17 @@ src/flanpy/
   _elimination.py  eliminate / eliminate_in_k, resultants, Groebner backend protocol
                  (SymPy only), exceptional k (design: dev/design/elimination.md)
   _doctests.py   method_doctests: methods of public classes for a module's __test__
-  symbolic/      grammar -> equations, bivariate cost series (d/du at u=1)
   _algebraic.py  AlgebraicReal (exact real algebraic numbers: minimal polynomial + index,
                  cached isolating interval), KRoot (a positive root of f(x, k)), root
                  isolation, the circle test; re-exported from flanpy
                  (design: dev/design/singularity.md)
   _singularity.py  Singularity, singularity / singularity_in_k: certificates, window
                  test (Case I/II, a), period, uniqueness, projection set in k
-  newton/        Newton polygon, Newton-Puiseux
-  transfer/      Thm 3.1 / 3.2, square-root case
-  families/      expansions in 1/k
-  automata/      thin regex/NFA front-end (cost vectors c_empty..c_star); optional
+  _newton.py     Newton polygon, Newton-Puiseux (design: dev/design/newton.md)
+  _transfer.py   Thm 3.1 / 3.2, square-root case
+  _families.py   expansions in 1/k
+  _symbolic.py   grammar -> equations, bivariate cost series (d/du at u=1)
+  _automata.py   thin regex/NFA front-end (cost vectors c_empty..c_star); optional
 tests/
 docs/            index, API reference, guide/ (one executed user-guide page per module)
 examples/        running examples, jupytext percent scripts (`python examples/<name>.py`)
