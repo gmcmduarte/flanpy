@@ -224,12 +224,14 @@ exceptional `k`. `KCases[T]` (generic in the value type) holds one result per pi
 ```python
 class KCases[T]:
     def __init__(self, pieces: Mapping[KSet, T] | Iterable[tuple[KSet, T]]) -> None: ...
-    pieces: tuple[tuple[KSet, T], ...]   # sorted by least element
-    covered: KSet                        # union of the pieces
-    uncovered: KSet                      # ~covered: undecided / not computed
-    def __getitem__(self, k: int) -> T: ...                  # KeyError if uncovered
+
+    pieces: tuple[tuple[KSet, T], ...]  # sorted by least element
+    covered: KSet  # union of the pieces
+    uncovered: KSet  # ~covered: undecided / not computed
+
+    def __getitem__(self, k: int) -> T: ...  # KeyError if uncovered
     def map[U](self, f: Callable[[T], U]) -> KCases[U]: ...
-    def restrict(self, s: KSet) -> KCases[T]: ...            # pieces ∩ s
+    def restrict(self, s: KSet) -> KCases[T]: ...  # pieces ∩ s
     def combine[U, V](self, other: KCases[U], f: Callable[[T, U], V]) -> KCases[V]: ...
 ```
 
