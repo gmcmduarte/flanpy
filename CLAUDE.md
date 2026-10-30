@@ -60,12 +60,14 @@ src/flanpy/
   _system.py     System (F = Phi(z, k, F)) and its well-posedness check; re-exported from flanpy
   _series.py     series / series_in_k: coefficients of a System; re-exported from flanpy
   _rings.py      private coefficient rings: pure-Python and python-flint backends
+  _kset.py       KSet (sets of k >= 1 from sign conditions) and KCases (piecewise
+                 results); KSet re-exported from flanpy (design: dev/design/kset.md)
   symbolic/      grammar -> equations, bivariate cost series (d/du at u=1)
   elimination/   Groebner and resultants, backend interface
   singularity/   m_rho, m_a, Case I/II, dominant-singularity checks
   newton/        Newton polygon, Newton-Puiseux
   transfer/      Thm 3.1 / 3.2, square-root case
-  families/      expansions in 1/k, KSet
+  families/      expansions in 1/k
   automata/      thin regex/NFA front-end (cost vectors c_empty..c_star); optional
 tests/
 docs/            index, API reference, guide/ (one executed user-guide page per module)
