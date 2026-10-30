@@ -99,6 +99,8 @@ select = [
     "RUF", # ruff-specific
     "D",   # pydocstyle
 ]
+# KSet prints in set notation: [1, 53] ∪ [55, ∞) (RUF001-RUF003).
+allowed-confusables = ["∪"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
