@@ -14,6 +14,8 @@ Sections:
   ratio   [z^n] ratios at n = 1000 against rho_k (L_k, k in {2, 10, 50, 54}).
   symk    symbolic k: projection polynomials, pieces, samples, merge (R_k, A_k, F_k, L_k).
   signed  F = 1 - z F^2: no positive candidate, radius 1/4 (dominant singularity -1/4).
+  reducible  section 5.5 (chunk 5): uniqueness from the periods of the recursive
+          components (L_108, F_108, W = z^2 + T, T, PS Example 23; symbolic L_k, F_k).
 """
 
 from __future__ import annotations
@@ -659,7 +661,196 @@ def section_signed() -> None:
         print(f"  certified bracketing refuses it: {e}")
 
 
+# ---------------------------------------------------------------------------
+# Section 5.5: every recursive component has period 1 => unique.
+# Uses the chunk-3/4 internals of flanpy (closure, valuations, periods).
+# ---------------------------------------------------------------------------
+
+
+def components(closure) -> list[list[int]]:
+    """Strongly connected components of the dependency graph, dependencies first."""
+    graph = closure.graph()
+    index, low, on, stack, out, counter = {}, {}, set(), [], [], [0]
+
+    def visit(v: int) -> None:  # Tarjan: emits a component after all it depends on
+        index[v] = low[v] = counter[0]
+        counter[0] += 1
+        stack.append(v)
+        on.add(v)
+        for u in graph[v]:
+            if u not in index:
+                visit(u)
+                low[v] = min(low[v], low[u])
+            elif u in on:
+                low[v] = min(low[v], index[u])
+        if low[v] == index[v]:
+            comp = []
+            while True:
+                u = stack.pop()
+                on.discard(u)
+                comp.append(u)
+                if u == v:
+                    break
+            out.append(sorted(comp))
+
+    for v in range(closure.m):
+        if v not in index:
+            visit(v)
+    return out
+
+
+def component_period(closure, comp: list[int], val, per) -> tuple[str, int] | None:
+    """(kind, p_C) of a recursive component; None if it is not recursive."""
+    graph = closure.graph()
+    inside = set(comp)
+    edges = [(i, j) for i in comp for j in graph[i] if j in inside]
+    if not edges:
+        return None  # nonrecursive coordinate: a polynomial in earlier ones
+    nonlinear = any(
+        sum(e[j] for j in comp) >= 2 for i in comp for _, _, e in closure.terms[i]
+    )
+    if nonlinear:  # coordinate period, common to the component (PS Thm 6.2)
+        periods = {per[i] for i in comp}
+        assert len(periods) == 1, periods
+        return "nonlinear", periods.pop()
+    # linear: cycle period of the weighted graph of B = dH_C/dY_C, whose entries
+    # are polynomials in z and earlier coordinates (valuation v_e, period pi_e).
+    weight, period = {}, {}
+    for i, j in edges:
+        vals = [ez + sum(ex * val[l] for l, ex in enumerate(e) if ex)
+                for _, ez, e in closure.jacobian_terms[i][j]]
+        pis = [per[l] for _, _, e in closure.jacobian_terms[i][j]
+               for l, ex in enumerate(e) if ex]
+        weight[i, j] = min(vals)
+        period[i, j] = reduce(math.gcd, [v - min(vals) for v in vals] + pis, 0)
+    d = {comp[0]: 0}
+    todo = [comp[0]]
+    while todo:
+        i = todo.pop()
+        for a, b in edges:
+            if a == i and b not in d:
+                d[b] = d[a] + weight[a, b]
+                todo.append(b)
+    g = reduce(math.gcd, [d[a] + weight[a, b] - d[b] for a, b in edges]
+               + list(period.values()), 0)
+    return "linear", g
+
+
+def components_rule(closure, verbose: bool = False) -> bool:
+    from flanpy._singularity import _period, _valuations
+
+    val = _valuations(closure)
+    per = [_period(closure, i) for i in range(closure.m)]
+    ok = True
+    for comp in components(closure):
+        result = component_period(closure, comp, val, per)
+        if verbose:
+            names = [str(closure.unknowns[i]) for i in comp]
+            print(f"    component {names}: {result or 'nonrecursive'}")
+        if result is not None and result[1] != 1:
+            ok = False
+    return ok
+
+
+def new_rule(period, proved_none, closure):
+    if period > 1:
+        return False
+    if proved_none:
+        return True
+    if components_rule(closure):
+        return True  # section 5.5
+    return None
+
+
+def section_reducible() -> None:
+    import warnings as _w
+
+    import flanpy._singularity as fs
+    from flanpy import eliminate_in_k, singularity, singularity_in_k
+    from flanpy._elimination import _closure
+
+    print("== section 5.5: uniqueness from the component periods ==")
+    W, Ae, Be = sp.symbols("W A_e B_e")
+    examples = [
+        ("L_k, k = 108", ssnf, L, 108),
+        ("F_k, k = 108", fk, F, 108),
+        ("W = z^2 + T", System({T: z + z * T**2, W: z**2 + T}, z=z), W, None),
+        ("T = z + zT^2", System({T: z + z * T**2}, z=z), T, None),
+        ("PS Ex. 23 (A)", System({Ae: z**2 + z**2 * Be, Be: z**3 + z**3 * Ae}, z=z), Ae, None),
+        ("constructed", System({F: z + z * F**2 + z * Gs, Gs: z + z * Gs**2}, z=z), F, None),
+    ]
+    for name, system, w, n in examples:
+        s = system.specialize(n) if n is not None else system
+        closure = fs._Closure(z, *_closure(s, w))
+        print(f"  {name}:")
+        rule = components_rule(closure, verbose=True)
+        with _w.catch_warnings():
+            _w.simplefilter("ignore")
+            old = singularity(eliminate(system, w, k=n) if n else eliminate(system, w))
+        fs._rule, saved = new_rule, fs._rule
+        try:
+            with _w.catch_warnings():
+                _w.simplefilter("ignore")
+                new = singularity(eliminate(system, w, k=n) if n else eliminate(system, w))
+        finally:
+            fs._rule = saved
+        print(f"    rule: {rule}; unique before {old.unique}, after {new.unique}; "
+              f"period {new.period}, rho = {old.rho}")
+
+    print("  numerical check, L_108: spectral radius of the (M, Mb) block of J")
+    mpmath.mp.dps = 30
+    rho = 1 / mpmath.sqrt(972)
+    sb = singularity(eliminate(ssnf, B, k=108))
+    sbb = singularity(eliminate(ssnf, Bb, k=108))
+    print(f"    (B, Bb) is critical too: rho_B = rho_L: {sb.rho == singularity(eliminate(ssnf, L, k=108)).rho}, "
+          f"Case {sb.case}")
+    for x in (rho, -rho):
+        if x > 0:  # exact values at the critical point (the Jacobian is singular)
+            b, bb = sb.a.evalf(30), sbb.a.evalf(30)
+        else:  # regular at -rho: Kleene, then Newton
+            b, bb = mpmath.mpf(0), mpmath.mpf(0)
+            for _ in range(200):
+                b, bb = 2*x*b**2 + 2*x*b*bb + 2*x*bb, 108*x + 2*x*b*bb + 2*x*bb**2
+            b, bb = mpmath.findroot(
+                lambda u, v: (2*x*u**2 + 2*x*u*v + 2*x*v - u,
+                              108*x + 2*x*u*v + 2*x*v**2 - v), (b, bb))
+        block = mpmath.matrix([[4*x*b + 2*x*bb, 2*x*b + 2*x], [2*x*bb, 2*x*b + 4*x*bb]])
+        eig = mpmath.eig(block)[0]
+        print(f"    z = {mpmath.nstr(x, 8)}: B = {mpmath.nstr(b, 8)}, eigenvalues "
+              f"{[mpmath.nstr(e, 6) for e in eig]}, moduli {[mpmath.nstr(abs(e), 4) for e in eig]}")
+
+    # PS Irr-DS (nonlinear branch) returns only the arguments 2k pi/q of the component
+    # and drops those of its inputs. Y = z + z^2 + zSY^2/100 with S = (z^2 + S^2)/2
+    # (S = 1 - sqrt(1 - z^2), period 2, radius 1) has radius 1 (inherited from S) and
+    # period 1, but should be singular at -1 (~ (1 + z)^(5/2)). Check: (-1)^n part of
+    # y_n n^(3/2), scaled by n^2, should tend to a non-zero constant.
+    Sv, Yv = sp.symbols("S_v Y_v")
+    feed = System({Sv: (z**2 + Sv**2) / 2,
+                   Yv: z + z**2 + z * Sv * Yv**2 / 100}, z=z)
+    y = series(feed, 402)[Yv]
+    with mpmath.workdps(40):
+        e = {n: mpmath.mpf(y[n].numerator) / y[n].denominator * mpmath.mpf(n) ** 1.5
+             for n in range(380, 403)}
+        alt = [(-1) ** n * (e[n] - (e[n - 1] + e[n + 1]) / 2) * n**2 for n in (381, 391, 401)]
+    print(f"  input singularity check (S periodic, critical): alternating part "
+          f"{[mpmath.nstr(a, 5) for a in alt]}")
+
+    print("  symbolic k with the new rule:")
+    fs._rule, saved = new_rule, fs._rule
+    try:
+        for name, system, w in [("L_k", ssnf, L), ("F_k", fk, F)]:
+            t0 = time.perf_counter()
+            with _w.catch_warnings(record=True) as caught:
+                _w.simplefilter("always")
+                cases = singularity_in_k(eliminate_in_k(system, w))
+            print(f"    {name} [{time.perf_counter() - t0:.1f} s], warnings: {len(caught)}")
+            for piece, value in cases.pieces:
+                print(f"      {piece}: {value}")
+    finally:
+        fs._rule = saved
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["fixed", "lk", "ratio", "symk", "signed"]
+    which = sys.argv[1:] or ["fixed", "lk", "ratio", "symk", "signed", "reducible"]
     for name in which:
         globals()[f"section_{name}"]()

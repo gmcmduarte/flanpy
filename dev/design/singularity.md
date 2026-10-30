@@ -2,7 +2,8 @@
 
 Status: approved 2026-10-30 with amendments (answers in Section 11). Implemented on
 branch `singularity`: chunks 2–4 (`AlgebraicReal`, `singularity`, `KRoot`,
-`singularity_in_k`). Finding of chunk 4: `k = 108` (Section 6.4).
+`singularity_in_k`). Finding of chunk 4: `k = 108` (Section 6.4). Chunk 5 (design,
+awaiting approval): uniqueness for reducible closures (Section 5.5).
 
 Build-order step 4. From a `Curve` `G(z, w, k) = 0` (step 3) and its branch, the series
 `w(z)` of `curve.system`, find the **dominant singularity** `ρ` of the branch (not of the
@@ -361,6 +362,145 @@ algebraic), "every sheet over `σ` is analytic" proves `σ` regular, "every shee
 singular" proves it singular, and a mixed fibre needs the branch identified at `σ`:
 certified evaluation along the ray (ACA steps (D1)–(D4)), or PS Thm 6.4 for linear
 components.
+
+### 5.5 Addendum (chunk 5): reducible closures, uniqueness from the component periods
+
+Needed for step 6: §5.3 leaves `unique = None` for `L_k` and `F_k` at `k = 108`
+(Section 6.4), where Broda claims uniqueness.
+
+**Setting.** Split the closure of `w` (zero coordinates removed) into strongly connected
+components in dependency order (PS eq. (6), Def. 2.20). A component is *recursive* if its
+graph has an edge inside it, *nonrecursive* otherwise (one coordinate, a polynomial in
+`z` and earlier coordinates). With the earlier solutions `S` substituted, a recursive
+component `Y_C = H_C(z, S(z), Y_C)` is an irreducible system (PS Lemma 3.6). It is
+*linear* if `H_C` is linear in `Y_C` (`Y_C = A + B Y_C`, with `A`, `B` polynomials in `z`
+and `S`), *nonlinear* otherwise. Every coordinate has radius `>= ρ`: the closure has no
+cancellation, so `w` dominates a positive multiple of each coordinate's powers.
+
+**Rule.** *If every recursive component `C` has `p_C = 1`, then `ρ` is the only
+singularity of `w` on `|z| = ρ`.* It is purely combinatorial: it does not decide which
+components are critical (radius `ρ`). `p_C` is computed exactly from the support:
+
+- nonlinear `C`: the common period of its coordinates (PS Thm 6.2). This is the BBY fixed
+  point of Section 5.2 on the whole closure, so the earlier solutions are taken into
+  account (`_period`).
+- linear `C`: the **cycle period**, the gcd of the exponents of all closed walks in the
+  graph of `B = ∂H_C/∂Y_C`, where an edge `i → j` may use any exponent in the support of
+  `B_ij(z)`. With `v_ij`, `π_ij` the valuation and period of `B_ij` (BBY sum and product
+  rules on the polynomial `B_ij(z, S)`, from the earlier `(val, Π)`), and potentials
+  `d_i` along a spanning tree (`d_j = d_i + v_ij`): `p_C = gcd(d_i + v_ij − d_j, π_ij)`
+  over the edges of `C`. This is the period of the diagonal of `(I − B)^{-1}` (PS
+  Thm 6.4, Algorithm Irr-DS lines 8–11).
+- **The coordinate period is not enough for linear components**: PS Example 23,
+  `A = z^2 + z^2 B`, `B = z^3 + z^3 A`, has coordinate periods `1` but cycle period `5`,
+  and singularities at the fifth roots of unity. And `p_C` is not the period of `w`:
+  `W = z^2 + T` has period 1 while `T`'s component has `p_C = 2`.
+
+**Proof.** Fix `α ≠ ρ` with `|α| = ρ`, `α = ρ e^{iθ}`. By induction on the components in
+dependency order, every coordinate is analytic at `α`.
+
+1. Nonrecursive: a polynomial in `z` and earlier coordinates.
+2. Radius `> ρ`: analytic on the whole circle.
+3. Radius `ρ` (critical), recursive, with the earlier `S` analytic at `α` (induction).
+   Then `Ĥ(z, Y) = H_C(z, S(z), Y)` is polynomial in `Y` with coefficients analytic at
+   `α`. **This replaces PS's "`(α, Y(α))` lies in the domain of convergence of `H`"**: when
+   an input is itself critical, the Taylor series of `Ĥ` at `0` has radius exactly `ρ`.
+   That happens for `L_k`: `{B, B̄}` is critical (`ρ_B = ρ_k`, Case I; spike, `k = 2` and
+   `k = 108`) and feeds the linear `{M, M̄}`.
+   - *Linear.* `Y_C = (I − B)^{-1} A` for `|z| < ρ`. For `0 < r < ρ`, `B(r) Y(r) <= Y(r)`
+     with `Y(r) > 0` and `A(r) != 0`, so `Λ(B(r)) < 1`. Every edge of `C` lies on a cycle,
+     so no entry of `B` is unbounded as `r → ρ` (it would force `Λ → ∞`). So `B`
+     converges absolutely on `|z| = ρ`, `|B_ij(α)| <= B_ij(ρ)`, and `Λ(B(ρ)) <= 1`. If `1`
+     is an eigenvalue of `B(α)`, Wielandt (PS Lemma 6.7) gives `Λ(B(ρ)) = 1` and
+     `B(α) = D B(ρ) D^{-1}` with `D = diag(e^{iφ_i})`. So for every edge and every `n` in
+     the support of `B_ij`, `e^{inθ} = e^{i(φ_i − φ_j)}`. Around a closed walk the
+     right-hand sides telescope, so `θ · (walk exponent) ∈ 2πZ`, hence `θ ∈ (2π/p_C)Z`
+     and `α = ρ`. Otherwise `I − B(α)` is invertible and `Y_C` is analytic at `α` (as in
+     the proof of PS Thm 6.4, §6.4). `Y_C(ρ)` may be infinite (Case II); this is not used.
+   - *Nonlinear.* `Y_C(r)` stays bounded as `r → ρ`. If one coordinate were unbounded,
+     all would be (strongly connected, non-negative), and then so would an entry of `J`
+     on a cycle, so `Λ(J(r)) → ∞`, against `Λ(J(r)) < 1` (PS Lemma B.5; cf. Lemma B.2).
+     For the same reason, the inputs that occur in `H_C` are finite at `ρ`. So `Y_C` and
+     `J(z) = ∂Ĥ/∂Y(z, Y_C(z))` converge absolutely on the closed disk. If
+     `|Y_i(α)| = Y_i(ρ)` for all `i`, the daffodil lemma (PS Lemma 6.5) gives
+     `θ ∈ (2π/p_C)Z`. Otherwise `I − J(α)` must be singular (otherwise the implicit
+     function theorem continues `Y_C` across `α`). Then
+     `1 <= Λ(J(α)) <= Λ(J(ρ)) <= 1` (Wielandt; PS Lemma 6.8, Cor. B.6), and
+     `|J_ij(α)| = J_ij(ρ)` for every entry. An entry that depends on some `Y_k` (one
+     exists: `C` is nonlinear) has period dividing `Π(Y_k) = p_C` (PS Lemma 6.6), so the
+     daffodil lemma gives `θ ∈ (2π/p_C)Z`. In both cases `α = ρ` when `p_C = 1` (as in the
+     proof of PS Thm 6.3, §6.3).
+4. So every coordinate, and `w`, is analytic at `α`. ∎
+
+**PS hypotheses, checked.**
+- Thm 6.3, Lemma 6.8 and Lemma B.2 are stated for an irreducible system. Lemma 3.6 makes
+  a component with substituted inputs one. Their proofs need `Ĥ` analytic at
+  `(α, Y(α))`, which holds when the inputs are analytic at `α`. Item 3 supplies this by
+  induction, and only because the rule also asks for `p = 1` on the earlier components.
+- Algorithm Irr-DS (§7.3), nonlinear branch, returns `{2kπ/q}` and drops the inputs'
+  `Δ_U`. Spike: with `S = (z^2 + S^2)/2` (`S = 1 − √(1 − z^2)`, period 2, radius 1) and
+  `Y = z + z^2 + zSY^2/100`, `Y` has period 1 and radius 1 (inherited from `S`). Yet the
+  alternating part of `y_n n^{3/2}`, times `n^2`, is stable at `−0.0308` for `n ≈ 400`.
+  So `Y` is singular at `−1`, like `(1 + z)^{5/2}`, and Irr-DS would miss `−1`. Our rule
+  is unaffected (`S`'s component has period 2). This is our observation, possibly an item
+  for Pivoteau–Salvy.
+- Thm 6.4 includes `Σ_A`, `Σ_B`, consistent with item 3. Its `q_B` (the gcd of the
+  periods of the entries of `B`, or the diagonal when that is 0) gives a superset; we use
+  the cycle period.
+- §8 (Prop. 8.2, Thm 8.5) gives local expansions at a *given* dominant singularity, with
+  inputs that have Puiseux expansions there. It does not locate singularities and adds
+  no hypothesis here (relevant to step 5).
+
+**Decision table** (replaces Section 5.3's third row):
+
+| situation | `unique` |
+|---|---|
+| period of `w` `> 1` | `False` |
+| circle test: no other candidate on `|z| = ρ` | `True` |
+| every recursive component has `p_C = 1` (includes "irreducible, nonlinear, period 1") | `True` |
+| otherwise | `None`, `SingularityWarning` |
+
+For symbolic `k`, the rule depends only on the support of the closure, which is constant
+on a piece (the support coefficients are in `P1`). So it enters `_rule` unchanged, and
+Section 6.2, item (6), only gains the rule. Cost of being purely combinatorial: a
+periodic component that is *not* critical makes the rule fail. In the constructed
+example, `G = z + zG^2` has period 2 and radius `1/2 > ρ_F`; the circle test still
+decides it. Comparing radii (certificates) could refine this later.
+
+**Spike** (`singularity_spike.py reducible`):
+
+| example | components (`p_C`) | `unique` before / with 5.5 |
+|---|---|---|
+| `L_k`, `k = 108` | `{B, B̄}` nonlinear 1; `{M, M̄}` linear 1; `L` nonrec. | `None` / `True` |
+| `F_k`, `k = 108` | `{B, B̄}` nonlinear 1; `F` nonrec. | `None` / `True` |
+| `W = z^2 + T` | `{T}` nonlinear 2; `W` nonrec. | `None` / `None` (truth `False`) |
+| `T = z + zT^2` | `{T}` nonlinear 2 | `False` / `False` (period) |
+| PS Example 23 | `{A, B}` linear 5 | `None` / `None` (truth `False`) |
+| constructed | `{G}` nonlinear 2; `{F}` nonlinear 1 | `True` / `True` (circle test) |
+| symbolic `L_k`, `F_k` | as above, every `k` | one piece `[1, ∞)`, `unique`, no warning |
+
+Numerically, at `k = 108` the `(M, M̄)` block of `J` has eigenvalues `0.4226, 1` at `ρ`
+and a pair of modulus `0.4226` at `−ρ` (`B(−ρ) = 0.4308`): `−ρ_108` is regular, as
+proved.
+
+**Broda §3.4, `k > 54`.** If `−ρ_k` were a root, the third root `µ_k` satisfies
+`µ_k = −9/(2k + 27)` (sum of the roots). The paper writes `µ_k = 1/(k(2k + 27)ρ_k^2) > 0`
+(product of the roots) and concludes by contradiction. The product of the roots of `p_k`
+is `−(−4)/(4k(2k + 27)) = 1/(k(2k + 27))`. Since `ρ_k · (−ρ_k) · µ_k = −ρ_k^2 µ_k`, this
+gives `µ_k = −1/(k(2k + 27)ρ_k^2) < 0`: **a sign error, and no contradiction**. Solving
+instead with `e_2 = −ρ_k^2 = −1/(4(2k + 27))` gives `k = 108` exactly, and indeed
+`p_108 = 4(27z + 1)(972z^2 − 1)` has `±1/√972` and `µ = −1/27`. So the argument misses
+`k = 108`. Uniqueness still holds there, by the rule above. This is an item for the
+authors, like the resultant note: "the argument for `k > 54` has a sign error in
+`µ_k` and misses `k = 108`; the conclusion stands".
+
+**Chunk 5 implementation (after approval).**
+- `_rule` gains the component rule (Tarjan SCCs, cycle period for linear components).
+- Tests: the spike's table, PS Example 23, the `k = 108` numerical check; `L_k` and `F_k`
+  become one piece `[1, ∞)`, as the original acceptance asked.
+- Updates: the docstrings of `singularity` and `singularity_in_k` (the rule and its
+  proof), the guide (`k = 108` paragraph), `examples/broda2020.py` (the `k = 108` cell,
+  the §3.4 note), CLAUDE.md.
 
 ## 6. Symbolic `k`
 
