@@ -113,6 +113,7 @@ These are the ground truth; the package is not "done" for a feature until its te
 - **Cite sources in code**: reference the paper and equation number next to each algorithm (e.g. "Broda et al. 2020, eq. (27)").
 - **Small, tested steps.** One module at a time, with its acceptance test from the list above.
 - **Commit hygiene**: clear messages, one logical change per commit, no generated artifacts or large data files in the repo.
+- **CI after every push**: check CI (`gh pr checks`) after every push, and only report when it is green or the failure is explained.
 - **Reports**: compact, at most ~40 lines, one line per item, point to design notes instead of repeating them, full detail only for PROBLEMS and QUESTIONS.
 
 ## Tooling
