@@ -20,19 +20,32 @@
 # - Step 1 (`System`, `series`): done, the coefficients of $R_k$, $S_k$, $L_k$ below.
 # - Step 2 (`KSet`): done, the sets of $k$ where the discriminant $32 k^2 (k - 54)^3$
 #   of $p_k$, eq. (18), is negative, zero and positive.
-# - Step 3 (elimination): eqs. (17)-(18) for $L_k$, computed from the system.
+# - Step 3 (elimination): done, eq. (17) for $L_k$ computed from the system (for every
+#   $k \ge 1$), and the curves of $R_k$ (radicand of eq. (2)) and $S_k$.
 # - Step 4 (singularity): $\rho_k$, $a_k$, and the Case I / Case II decision.
 # - Step 5 (Newton-Puiseux): $\alpha = 1/2$, eq. (32).
 # - Step 6 (transfer): eqs. (6)-(8) for $R_k$ and $S_k$.
 # - Step 7 (families in $k$): eqs. (35)-(38) and Table 1.
 
 # %%
+import time
 from fractions import Fraction
 from math import comb, factorial
 
-from sympy import diff, discriminant, expand, factor, resultant, sqf_part, symbols
+from sympy import (
+    Poly,
+    diff,
+    discriminant,
+    expand,
+    factor,
+    resultant,
+    simplify,
+    sqf_part,
+    sqrt,
+    symbols,
+)
 
-from flanpy import KSet, System, series, series_in_k
+from flanpy import KSet, System, eliminate, eliminate_in_k, series, series_in_k
 
 z, k = symbols("z k")
 R, S = symbols("R S")
@@ -190,3 +203,75 @@ assert KSet.where(D, "<", k=k) == KSet([(36, 53)])
 assert KSet.where(D, "==", k=k) == KSet.of(54)
 print("D > 0:", KSet.where(D, ">", k=k))
 print("D < 0:", KSet.where(D, "<", k=k))
+
+# %% [markdown]
+# ## Step 3: elimination
+#
+# {func}`flanpy.eliminate_in_k` eliminates the other unknowns and returns the curve of
+# one coordinate for symbolic $k$, as a {class}`flanpy.KCases`: a generic curve, and a
+# separate piece for each $k$ where it changes.
+#
+# ### $R_k$ and $S_k$
+#
+# $R_k$ needs no elimination. The discriminant of its curve is the radicand
+# $\Delta_k(z) = 1 - 2z - (7 + 8k) z^2$ of eq. (2), and eq. (2) is a root.
+# $S_k$ depends on $R_k$, which a resultant eliminates.
+
+# %%
+r_cases = eliminate_in_k(rs, R)
+print("R_k:", r_cases)
+g_r = r_cases[1].as_expr()  # one piece, [1, ∞)
+delta = 1 - 2 * z - (7 + 8 * k) * z**2
+assert expand(discriminant(g_r, R) - delta) == 0
+assert simplify(g_r.subs(R, (1 - z - sqrt(delta)) / (4 * z))) == 0  # eq. (2)
+s_cases = eliminate_in_k(rs, S)
+print("S_k:", s_cases)
+assert r_cases.covered == s_cases.covered == KSet.all()
+
+# %% [markdown]
+# ### $L_k$: eq. (17)
+#
+# Eliminating $B_k$, $\bar B_k$, $M_k$ and $\bar M_k$ from the five equations gives
+# **exactly** eq. (17) (no unit in $\mathbb Q(k)$), with $p_k$ of eq. (18) as leading
+# coefficient, and for every $k \ge 1$. The value $k = 54$ is a candidate: the
+# leading coefficients of two Gröbner basis elements vanish there. The curve is
+# recomputed at $k = 54$, equals the generic one, and stays in the generic piece.
+
+# %%
+start = time.perf_counter()
+l_cases = eliminate_in_k(ssnf, L)
+print(f"eliminate_in_k(L_k): {time.perf_counter() - start:.1f} s")
+print(l_cases)
+assert len(l_cases.pieces) == 1 and l_cases.covered == KSet.all()
+tail = l_cases.tail  # the generic piece
+assert tail is not None
+curve_l = tail[1]
+assert expand(curve_l.as_expr() - G.subs(W, L)) == 0  # eq. (17), exactly
+assert expand(Poly(curve_l.as_expr(), L).LC() - p_k) == 0  # eq. (18)
+
+# %% [markdown]
+# Spot check: the generic curve, certified at each $k$ with
+# {meth}`Curve.specialize <flanpy.Curve.specialize>`, equals the curve computed from
+# the system specialised at that $k$, and the series of step 1 satisfies it.
+
+# %%
+for n in (1, 2, 10, 50, 54):
+    at_n = eliminate(ssnf, L, k=n)
+    assert curve_l.specialize(n) == at_n
+    g_n = Poly(at_n.as_expr(), L, z)
+    w_n = [int(c) for c in series(ssnf, N, k=n)[L]]
+    total, power = [0] * (N + 1), [1] + [0] * N
+    for j in range(g_n.degree(L) + 1):
+        a_j = [int(g_n.coeff_monomial(L**j * z**i)) for i in range(N + 1)]
+        total = [x + y for x, y in zip(total, times(a_j, power), strict=True)]
+        power = times(power, w_n)
+    assert total == [0] * (N + 1)
+print(f"eq. (17) at k = 1, 2, 10, 50, 54: satisfied by the series up to z^{N}")
+
+# %% [markdown]
+# The denominator series $F_k = z + B_k + \bar B_k$ of eq. (38) has a cubic curve:
+
+# %%
+F = symbols("F")
+fk = System({B: ssnf.equations[B], Bb: ssnf.equations[Bb], F: z + B + Bb}, z=z, k=k)
+print("F_k:", eliminate_in_k(fk, F))
