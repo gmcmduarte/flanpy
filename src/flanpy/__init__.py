@@ -11,9 +11,9 @@ Pre-alpha: implemented so far are the input type :class:`System`, its power-seri
 coefficients (:func:`series`, :func:`series_in_k`), sets of alphabet sizes
 :class:`KSet` and piecewise results :class:`KCases`, elimination to a :class:`Curve`
 (:func:`eliminate`, :func:`eliminate_in_k`), exact real algebraic numbers
-(:class:`AlgebraicReal`), and the dominant singularity, at a fixed ``k``
+(:class:`AlgebraicReal`), the dominant singularity, at a fixed ``k``
 (:func:`singularity`) and for symbolic ``k`` (:func:`singularity_in_k`,
-:class:`KRoot`).
+:class:`KRoot`), and the local expansion at a fixed ``k`` (:func:`local_expansion`).
 
 Examples
 --------
@@ -29,6 +29,7 @@ from flanpy._algebraic import AlgebraicReal, KRoot
 from flanpy._curve import Curve
 from flanpy._elimination import eliminate, eliminate_in_k
 from flanpy._kset import KCases, KSet
+from flanpy._newton import LocalExpansion, local_expansion
 from flanpy._series import series, series_in_k
 from flanpy._singularity import (
     Singularity,
@@ -54,6 +55,7 @@ __all__ = [
     "KCases",
     "KRoot",
     "KSet",
+    "LocalExpansion",
     "Singularity",
     "SingularityWarning",
     "System",
@@ -64,6 +66,7 @@ __all__ = [
     "__version__",
     "eliminate",
     "eliminate_in_k",
+    "local_expansion",
     "series",
     "series_in_k",
     "singularity",
