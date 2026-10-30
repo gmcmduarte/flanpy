@@ -15,7 +15,7 @@ Pipeline for counting problems whose generating functions are algebraic, possibl
 5. **Transfer**: `[z^n] w(z) ~ -b/Gamma(-alpha) * rho^-n * n^(-alpha-1)` (Case I), `~ (1/c)/Gamma(alpha) * rho^-n * n^(alpha-1)` (Case II). Includes the square-root special case (quadratic `G`, closed form).
 6. **Families in k**: `rho_k`, `a_k`, `b_k`, `c_k` as Puiseux expansions in `1/k`, plus limits as `k -> infinity`.
 
-Reference papers (uploaded to the Claude project):
+Reference papers (in Guilherme's Zotero library):
 - Broda, Machiavelo, Moreira, Reis, *Analytic Combinatorics and Descriptional Complexity of Regular Languages on Average* (SIGACT News, 2020) — the full machinery for implicit curves.
 - Broda, Machiavelo, Moreira, Reis, *A Hitchhiker's Guide to descriptional complexity through analytic combinatorics* (TCS 528, 2014) — simpler curves with square-root singularities and cost generating functions.
 - Flajolet & Sedgewick, *Analytic Combinatorics* (2008) — the general theory (Thm VI.1 and Cor. VI.1, Pringsheim IV.6, algebraic coefficient asymptotics).
