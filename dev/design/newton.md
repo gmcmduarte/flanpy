@@ -549,10 +549,12 @@ class LocalExpansion[X: (AlgebraicReal, KRoot)]:
     c: X | None  # Case II: 1/w = c s^alpha + ...; None in Case I
 
     def terms(self, n: int) -> list[tuple[Fraction, AlgebraicReal]]: ...
+
     # fixed k only: the first n terms (exponent, coefficient) of w in powers of s^(1/kappa),
     # from the constant term a (Case I) or from s^-alpha (Case II); exact, cached
 
     def specialize(self, k: int) -> LocalExpansion[AlgebraicReal]: ...
+
     # k, kset: properties forwarded from the singularity
 
 
