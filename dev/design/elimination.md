@@ -557,9 +557,12 @@ test is not added (CI timing is noisy). The examples print the time.
   example), `KCases` and its members. The package docstring and the `index.md` warning
   list step 3 as implemented. API page entries for `eliminate`, `eliminate_in_k`,
   `Curve` and `KCases`.
-- **`docs/refs.bib`**: Kalkbrener 1997 (doi:10.1006/jsco.1997.0113, from the PDF
-  footer), Gianni 1987 (LNCS 378), Noether 1922 and Kaltofen 1995, each checked against
-  Crossref; Cox–Little–O'Shea *IVA* (4th ed.).
+- **`docs/refs.bib`** (done): Kalkbrener 1997 (doi:10.1006/jsco.1997.0113), Gianni
+  (EUROCAL '87, LNCS 378, published 1989, doi:10.1007/3-540-51517-8_128), Noether
+  1922 (Math. Ann. 85(1), 26–40, doi:10.1007/BF01449599; Crossref gives pages 26–40,
+  the Hilbert Festschrift version is 26–33) and Kaltofen 1995 (doi:10.1006/jcss.1995.1023),
+  each checked against Crossref on 2026-10-30, and Cox–Little–O'Shea *IVA*, 4th ed.
+  (doi:10.1007/978-3-319-16721-3).
 - **Guide page `docs/guide/elimination.md`** (executed): `eliminate` at a fixed `k` and
   for a system without `k`; `eliminate_in_k` and reading a `KCases` (`pieces`, `tail`,
   `[n]`); an exceptional `k` and why it is split; factor selection on the symmetric
@@ -568,10 +571,12 @@ test is not added (CI timing is noisy). The examples print the time.
   `zF^2 − F + 1` (no elimination needed; assert), a factor check against the series.
   Status: step 3 done.
 - **`examples/broda2020.py`**, "Step 3: elimination": `eliminate_in_k` for `R_k`
-  (quadratic), `S_k` (resultant, extraneous `z`), and `L_k`: one piece `[1, ∞)`, assert
-  equality with eq. (17), print the time, spot-check `k = 1..60` against `eliminate(...,
-  k=n)`. Step 2's section then takes `G` from `eliminate_in_k` instead of typing
-  eq. (17) by hand. `F_k` for eq. (38). Status: step 3 done.
+  (quadratic; its discriminant is the radicand of eq. (2), and eq. (2) is a root), `S_k`
+  (resultant), and `L_k`: one piece `[1, ∞)`. It asserts equality with eq. (17) and that
+  `lc_w` is `p_k` (eq. (18)), prints the time, and spot-checks `k = 1, 2, 10, 50, 54`
+  against `eliminate(..., k=n)` and the series. Step 2's section keeps eq. (17) as
+  printed (it comes first in the file), and step 3 asserts that the computed curve
+  equals it. `F_k` for eq. (38). Status: step 3 done.
 - **CLAUDE.md**: "Planned layout" (`_elimination.py` with `eliminate`,
   `eliminate_in_k` and the backend protocol; `_curve.py` with `Curve`; the
   `elimination/` package entry removed), a "Step 3" block under Decisions, the 1.4 s
