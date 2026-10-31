@@ -269,8 +269,8 @@ class LocalExpansion[X: (AlgebraicReal, KRoot)]:
         """
         return self._singularity.kset
 
-    def terms(self, n: int) -> list[tuple[Fraction, AlgebraicReal]]:
-        """Return the first ``n`` terms ``(exponent, coefficient)`` of ``w``.
+    def terms(self, count: int) -> list[tuple[Fraction, AlgebraicReal]]:
+        """Return the first ``count`` terms ``(exponent, coefficient)`` of ``w``.
 
         ``w`` is expanded in powers of ``t = s^{1/κ}``, ``s = 1 - z/ρ``, with
         consecutive exponents (zeros included): from ``0`` (Case I, the first
@@ -279,8 +279,8 @@ class LocalExpansion[X: (AlgebraicReal, KRoot)]:
 
         Parameters
         ----------
-        n : int
-            How many terms, ``n >= 0``.
+        count : int
+            How many terms, ``count >= 0`` (zero coefficients included).
 
         Returns
         -------
@@ -290,9 +290,9 @@ class LocalExpansion[X: (AlgebraicReal, KRoot)]:
         Raises
         ------
         TypeError
-            If ``n`` is not an ``int``.
+            If ``count`` is not an ``int``.
         ValueError
-            If ``n < 0``, or the expansion is for symbolic ``k``.
+            If ``count < 0``, or the expansion is for symbolic ``k``.
 
         Examples
         --------
@@ -307,25 +307,35 @@ class LocalExpansion[X: (AlgebraicReal, KRoot)]:
         >>> [(str(x), str(d)) for x, d in e.terms(4)]
         [('0', '2'), ('1/2', '-2'), ('1', '2'), ('3/2', '-2')]
         """
-        if isinstance(n, bool) or not isinstance(n, int):
-            raise TypeError(f"n must be an int, got {n!r}")
-        if n < 0:
-            raise ValueError(f"n must be >= 0, got {n}")
+        if isinstance(count, bool) or not isinstance(count, int):
+            raise TypeError(f"count must be an int, got {count!r}")
+        if count < 0:
+            raise ValueError(f"count must be >= 0, got {count}")
         if self._singularity.k is not None:
             raise ValueError(
                 "terms need a fixed k: use specialize(n) for the expansion at k = n"
             )
-        if len(self._terms) < n:
-            if self._state is None:  # after unpickling
-                fixed = self._singularity
-                assert isinstance(fixed.rho, AlgebraicReal)
-                object.__setattr__(self, "_state", _analyse(fixed)[1])
-            assert self._state is not None
-            values = self._state.terms(n)
-            for d in values[len(self._terms) : n]:
+        if len(self._terms) < count:
+            values = self._field_terms(count)
+            for d in values[len(self._terms) : count]:
                 self._terms.append(d.to_real())
         start, kappa = self._state_start(), self._ramification
-        return [(start + Fraction(i, kappa), d) for i, d in enumerate(self._terms[:n])]
+        return [
+            (start + Fraction(i, kappa), d) for i, d in enumerate(self._terms[:count])
+        ]
+
+    def _field_terms(self, count: int) -> list[_Element]:
+        """Return the first ``count`` coefficients in the branch's field.
+
+        Fixed ``k`` only. They all lie in one real number field ``L`` (newton.md,
+        section 5.2); step 6 (:mod:`flanpy._transfer`) computes with them there.
+        """
+        if self._state is None:  # after unpickling
+            fixed = self._singularity
+            assert isinstance(fixed.rho, AlgebraicReal)
+            object.__setattr__(self, "_state", _analyse(fixed)[1])
+        assert self._state is not None
+        return self._state.terms(count)
 
     def _state_start(self) -> Fraction:
         return Fraction(0) if self._singularity.case == "I" else -self._alpha

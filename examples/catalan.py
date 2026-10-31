@@ -22,7 +22,8 @@
 # - Step 4 (singularity): done, $\rho = 1/4$, Case I, $a = F(\rho) = 2$, unique.
 # - Step 5 (Newton-Puiseux): done, $F = 2 - 2 s^{1/2} + 2 s - \dots$ with $s = 1 - 4z$:
 #   $\alpha = 1/2$, $b = 2$.
-# - Step 6 (transfer): $[z^n] F \sim 4^n n^{-3/2} / \sqrt{\pi}$.
+# - Step 6 (transfer): done, $[z^n] F = 4^n n^{-3/2} / \sqrt{\pi}\,
+#   (1 - \tfrac{9}{8n} + \tfrac{145}{128 n^2} - \dots)$.
 # - Step 2 (`KSet`): does not apply, there is no parameter (see below).
 # - Step 7 (families in $k$): does not apply, there is no parameter.
 
@@ -40,7 +41,14 @@ from math import comb
 
 from sympy import symbols
 
-from flanpy import System, eliminate, local_expansion, series, singularity
+from flanpy import (
+    System,
+    asymptotics,
+    eliminate,
+    local_expansion,
+    series,
+    singularity,
+)
 
 z, F = symbols("z F")
 catalan = System({F: 1 + z * F**2}, z=z)
@@ -110,3 +118,39 @@ terms = e.terms(6)
 print([(str(x), str(d)) for x, d in terms])
 assert [x for x, _ in terms] == [Fraction(i, 2) for i in range(6)]
 assert [d for _, d in terms] == [2 * (-1) ** i for i in range(6)]  # 2/(1 + √s)
+
+# %% [markdown]
+# ## Step 6: the coefficients
+#
+# Singularity analysis transfers each term $d\, s^x$ of the local expansion to
+# $d\, \rho^{-n} n^{-x-1} / \Gamma(-x)\, (1 + e_1(-x)/n + \dots)$
+# {cite:p}`flajolet-sedgewick-2009` (Thm VI.1, Thm VI.4); the terms with $x$ a
+# non-negative integer are analytic and give nothing. From $F = 2 - 2 s^{1/2} + 2s -
+# 2 s^{3/2} + \dots$, {func}`flanpy.asymptotics` collects them by powers of $n$:
+# $[z^n] F = 4^n / \sqrt{\pi}\, (n^{-3/2} - \tfrac98 n^{-5/2} + \tfrac{145}{128}
+# n^{-7/2} - \tfrac{1155}{1024} n^{-9/2} + \dots)$, the known expansion of the
+# Catalan numbers. The leading constant is Broda's $-b/\Gamma(-\alpha) = 2/(2\sqrt\pi)$
+# {cite:p}`broda-2020-sigact` (Thm 3.2). The powers $n^{-2}, n^{-3}, \dots$ have
+# coefficient 0: they would come from integer exponents of $s$.
+
+# %%
+a = asymptotics(e)
+n = symbols("n")
+print(a)
+print(a.as_expr(n, count=5))
+assert a.exponent == Fraction(-3, 2) and str(a.leading) == "1/sqrt(pi)"
+ds = [d.algebraic() for _, d in a.terms(7)]
+assert ds == [1, 0, Fraction(-9, 8), 0, Fraction(145, 128), 0, Fraction(-1155, 1024)]
+assert a.error_exponent(5) == Fraction(-9, 2)
+
+# %% [markdown]
+# Against the exact coefficient at $n = 1000$: one term is off by $1.1 \cdot 10^{-3}$
+# (relative), and each further non-zero term gains a factor $1/n$. `count` counts the
+# coefficients $D_j$ including the zeros, so `count=5` is three non-zero terms.
+
+# %%
+exact = series(catalan, 1000)[F][1000]
+assert exact == comb(2000, 1000) // 1001
+errors = [abs(a.evalf(1000, count=c, dps=30) / exact - 1) for c in (1, 3, 5)]
+print([f"{float(x):.2e}" for x in errors])
+assert errors[0] < 1.2e-3 and errors[1] < 1.2e-6 and errors[2] < 1.2e-9
