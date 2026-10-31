@@ -243,7 +243,7 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - [x] Build-order step 3 (`elimination`): done 2026-10-30 (PR #5).
 - [x] Build-order step 4 (`singularity`): done 2026-10-30 (PR #6).
 - [x] Build-order step 5 (`newton`): done 2026-10-31 (PR #7).
-- [x] Build-order step 6 (`transfer`): done (PR #8).
+- [x] Build-order step 6 (`transfer`): done 2026-10-31 (PR #8).
 - Step 7: `2/(b_k c_k) ∈ Q(ρ_k)` at every sampled `k` (it is `-ρ'(1)/ρ(1)` for the letter-marking parameter), so eq. (38) may need only `ρ_k`'s expansion (eq. (35)): reduce the limit to `A(ρ_k, k)`, `A ∈ Q(k)[z]`, by `A^2 ≡ 4 D_b D_c/(N_b N_c) (mod f)` (transfer.md §7.3).
 - Broda 2020 §3.4 prints `res_w(G, ∂G/∂w)` as a rational function; it differs from the computed resultant `k^3 z^3 p_k^2 q_k^2`; the conclusion stands; to confirm with the authors (not an erratum).
 - Broda 2020 §3.4, uniqueness for `k > 54`: as extracted, the argument writes `µ_k = 1/(k(2k + 27)ρ_k^2) > 0`; the product of the roots gives `−1/(k(2k + 27)ρ_k^2) < 0`, so there is no contradiction, and `−ρ_k` is a root exactly at `k = 108`. The conclusion stands (design note §5.5). To check against the printed text, then raise with the authors.
