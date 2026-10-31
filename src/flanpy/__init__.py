@@ -14,7 +14,9 @@ coefficients (:func:`series`, :func:`series_in_k`), sets of alphabet sizes
 (:class:`AlgebraicReal`), the dominant singularity, at a fixed ``k``
 (:func:`singularity`) and for symbolic ``k`` (:func:`singularity_in_k`,
 :class:`KRoot`), and the local expansion at the singularity, at a fixed ``k``
-(:func:`local_expansion`) and for symbolic ``k`` (:func:`local_expansion_in_k`).
+(:func:`local_expansion`) and for symbolic ``k`` (:func:`local_expansion_in_k`), and
+the asymptotics of the coefficients at a fixed ``k`` (:func:`asymptotics`,
+:class:`Asymptotics`, :class:`GammaConstant`).
 
 Examples
 --------
@@ -46,12 +48,15 @@ from flanpy._system import (
     WellPosednessError,
     ZeroCoordinateWarning,
 )
+from flanpy._transfer import Asymptotics, GammaConstant, asymptotics
 
 __version__: str = _version("flanpy")
 
 __all__ = [
     "AlgebraicReal",
+    "Asymptotics",
     "Curve",
+    "GammaConstant",
     "IllPosedSystemError",
     "KCases",
     "KRoot",
@@ -65,6 +70,7 @@ __all__ = [
     "WellPosednessError",
     "ZeroCoordinateWarning",
     "__version__",
+    "asymptotics",
     "eliminate",
     "eliminate_in_k",
     "local_expansion",

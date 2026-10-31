@@ -23,7 +23,6 @@ from flanpy import (
     eliminate,
     eliminate_in_k,
     local_expansion,
-    series,
     singularity,
     singularity_in_k,
 )
@@ -435,59 +434,6 @@ def test_a_in_q_rho_branches() -> None:
     assert not in_rho and field.degree == 2 and a.to_real() == sqrt2 and rho_k == 1
 
 
-# -- coefficients at n = 1000 (step 6 turns this into a transfer test) -----------------
-
-
-def transfer(e: LocalExpansion[Any], n: int, count: int) -> mpmath.mpf:
-    """Transfer the first `count` terms, x ∉ Z_{>=0} (Γ ratios, FS Thm VI.1)."""
-    with mpmath.workdps(60):
-        rho = mp(e.singularity.rho, 60)
-        total = mpmath.mpf(0)
-        for x, d in e.terms(count):
-            if x.denominator == 1 and x >= 0:
-                continue
-            xm = mpmath.mpf(x.numerator) / x.denominator
-            total += mp(d, 60) * mpmath.gammaprod([n - xm], [-xm, n + 1])
-        return total * rho ** (-n)
-
-
-# (name, terms, bound): the measured errors at n = 1000 (as in the spike), times 3.
-# L_k (Case II, 1/V inverted): 5 terms reach the singular exponents -1/2, 1/2, 3/2, so
-# the first omitted one is 5/2, a relative O(n^-3): 8.9e-11 (k = 2, 10, 50); with 3
-# terms (-1/2, 1/2) it is O(n^-2), 9.9e-8, like F_k's 4 terms (1/2, 3/2), 2.8e-6.
-SLOW = [
-    ("catalan", 5, 3 * 3.8e-6),
-    ("motzkin", 6, 3 * 1.1e-8),
-    ("r_2", 5, 3 * 2.9e-6),
-    ("a_2", 5, 3 * 3.3e-6),
-    ("constructed", 5, 3 * 3.9e-6),
-    ("s5_tree", 5, 3 * 5.2e-7),
-    ("f_2", 4, 3 * 2.8e-6),
-    ("l_2", 5, 3 * 8.9e-11),
-]
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize(("name", "count", "bound"), SLOW, ids=[x[0] for x in SLOW])
-def test_coefficients_at_1000(name: str, count: int, bound: float) -> None:
-    _, system, w, n = next(e for e in EXAMPLES if e[0] == name)
-    e = expand(system, w, n)
-    c = series(system, 1000, k=n)[w] if n is not None else series(system, 1000)[w]
-    value = mpmath.mpf(Fraction(c[1000]).numerator) / Fraction(c[1000]).denominator
-    error = abs(value / transfer(e, 1000, count) - 1)
-    assert error < bound
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("n", [10, 50])
-def test_broda_coefficients_at_1000(n: int) -> None:
-    for system, w, count, bound in ((FK, F, 4, 3 * 2.8e-6), (SSNF, L, 5, 3 * 9.1e-11)):
-        e = expand(system, w, n)
-        c = series(system, 1000, k=n)[w]
-        value = mpmath.mpf(Fraction(c[1000]).numerator) / Fraction(c[1000]).denominator
-        assert abs(value / transfer(e, 1000, count) - 1) < bound
-
-
 # -- properties ------------------------------------------------------------------------
 
 
@@ -509,11 +455,7 @@ def test_random_systems(system: System) -> None:
         assert e.alpha == Fraction(1, kappa) and e.b is not None and e.b > 0
     else:
         assert e.c is not None and e.c > 0
-    if s.period == 1 and s.unique:
-        n = 300
-        c = series(system, n)[F]
-        value = mpmath.mpf(Fraction(c[n]).numerator) / Fraction(c[n]).denominator
-        assert abs(value / transfer(e, n, 1 + (s.case == "I")) - 1) < 0.05
+    # The coefficient check at n = 300 is in test_transfer.py (test_random_systems).
 
 
 # -- API -------------------------------------------------------------------------------
