@@ -172,5 +172,108 @@ asymptotics(local_expansion(singularity(eliminate(odd, T))))
 
 When step 4 cannot decide uniqueness (`unique is None`, with a
 {class}`~flanpy.SingularityWarning`), {func}`flanpy.asymptotics` refuses too: nothing
-is guessed. An expansion for symbolic $k$ needs a value, `asymptotics(piece, k=n)`;
-the leading constants for symbolic $k$ come in the next part of this step.
+is guessed.
+
+## Ratios: averages
+
+Averages are ratios of coefficients with the same $\rho$: a cost $C(z)$ over the counts
+$F(z)$, $[z^n] C / (n [z^n] F)$. {func}`flanpy.ratio` divides two expansions:
+$[z^n] A / [z^n] B = n^{\beta_A - \beta_B} (q_0 + q_1 n^{-1/\kappa} + \dots)$, with the
+exact limit $q_0 = C_A/C_B$ (the $\Gamma$ factors divide) and the further $q_j$ from
+the quotient of the two series, computed in one number field. {cite:t}`broda-2020-sigact`
+§2: the probability that a symbol of a regular expression is a star tends to $\rho_k$
+(eq. (8)); at $k = 2$ the ratio is $\rho (1 + \tfrac{1}{2n} + \dots)$:
+
+```{code-cell} python
+from flanpy import ratio
+
+k, S = symbols("k S")
+rs = System({R: (k + 1) * z + 2 * z * R**2 + z * R, S: z * R + z * S + 4 * z * S * R}, z=z, k=k)
+
+
+def at_2(w):
+    return asymptotics(local_expansion(singularity(eliminate(rs, w, k=2))))
+
+
+stars = ratio(at_2(S), at_2(R))
+print(stars.exponent, stars.limit, stars.limit.algebraic() == at_2(R).rho)
+for power, q in stars.terms(3):
+    print(f"n^{power}: {q}")
+```
+
+With different $\Gamma$ classes the limit keeps a $\Gamma$ part. $K = (1 - s^{1/4})/2$
+over Catalan, both at $\rho = 1/4$:
+
+```{code-cell} python
+both = System({F: 1 + z * F**2, U: z + U**2, K: U / 2 + K**2}, z=z)
+
+
+def at_quarter(w):
+    return asymptotics(local_expansion(singularity(eliminate(both, w))))
+
+
+quarter_over_catalan = ratio(at_quarter(K), at_quarter(F))
+print(quarter_over_catalan.exponent)
+quarter_over_catalan.limit.as_expr()
+```
+
+Constants are compared exactly: $\Gamma(\nu)$ with $\nu > 1/2$ is rewritten by reflection,
+$\Gamma(\nu)\Gamma(1 - \nu) = \pi/\sin(\pi\nu)$, for `==` and hashing, so
+$\sqrt\pi/(8\Gamma(3/4))$ and $\sqrt2\,\Gamma(1/4)/(16\sqrt\pi)$ are equal. A
+denominator with non-zero coefficients in two $\Gamma$ classes (a pole and a square
+root, say) gives terms $q_j$ that are sums of several $\Gamma$ monomials;
+{meth}`~flanpy.Ratio.terms` then stops with `NotImplementedError` after the last
+representable one, while {meth}`~flanpy.Ratio.evalf` still works.
+
+Expansions at different $\rho$ are refused: their ratio has an exponential factor
+$(\rho_B/\rho_A)^n$.
+
+```{code-cell} python
+:tags: [raises-exception]
+
+ratio(a, m)  # Catalan (ρ = 1/4) over Motzkin (ρ = 1/3)
+```
+
+## Symbolic $k$
+
+{func}`flanpy.asymptotics_in_k` maps the pieces of {func}`flanpy.local_expansion_in_k`
+one to one. On a piece the exponent and the $O$-term are those of every $k$, and the
+leading constant is a monomial in the {class}`~flanpy.KRoot` s of step 5:
+$\alpha b_k/\Gamma(1 - \alpha)$ (Case I) or $c_k^{-1}/\Gamma(\alpha)$ (Case II), exposed as
+{attr}`~flanpy.GammaConstant.rational`, {attr}`~flanpy.GammaConstant.factors` (pairs
+`(KRoot, exponent)`) and {attr}`~flanpy.GammaConstant.gamma`.
+{meth}`~flanpy.GammaConstant.at` evaluates it exactly at a fixed $k$;
+`algebraic()`, `evalf` and `as_expr` need a fixed $k$, and so do the further terms
+({meth}`~flanpy.Asymptotics.specialize`). For $R_k$ (Broda eq. (6)):
+
+```{code-cell} python
+from flanpy import asymptotics_in_k, eliminate_in_k, local_expansion_in_k, singularity_in_k
+
+e_r = local_expansion_in_k(singularity_in_k(eliminate_in_k(rk, R)))
+cases = asymptotics_in_k(e_r)
+((part, a_r),) = cases.pieces
+lead = a_r.leading
+print(part, a_r.exponent, lead.rational, lead.gamma)
+print([m for _, m in lead.factors], lead.factors[0][0] == e_r[1].b)
+print(lead.at(2) == r2.leading, a_r.specialize(2) == r2)
+```
+
+Ratios of two families: {meth}`KCases.combine <flanpy.KCases.combine>` intersects the
+pieces and applies {func}`flanpy.ratio` on each. The stars of $R_k$ again, now for
+every $k \ge 1$: the limit is the monomial $2 b_k^{-1} c_k^{-1}$, equal to $\rho_k$ at
+each $k$:
+
+```{code-cell} python
+e_s = local_expansion_in_k(singularity_in_k(eliminate_in_k(rs, S)))
+e_rs = local_expansion_in_k(singularity_in_k(eliminate_in_k(rs, R)))
+star_cases = asymptotics_in_k(e_s).combine(asymptotics_in_k(e_rs), ratio)
+((part, star),) = star_cases.pieces
+print(part, star.limit.rational, [m for _, m in star.limit.factors])
+print(all(star.limit.at(n).algebraic() == e_rs[n].singularity.rho.at(n) for n in range(1, 6)))
+```
+
+A piece where $\rho_k$ is not known to be the only dominant singularity makes
+{func}`flanpy.asymptotics_in_k` raise, naming the piece; restrict the cases first
+({meth}`KCases.restrict <flanpy.KCases.restrict>`). Expansions of these constants in
+powers of $1/k$, and their limits as $k \to \infty$ (Broda eqs. (35)-(38)), are
+step 7.

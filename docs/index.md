@@ -15,8 +15,8 @@ elimination to one curve ({func}`flanpy.eliminate`, {func}`flanpy.eliminate_in_k
 {class}`flanpy.KRoot`), the dominant singularity ({func}`flanpy.singularity`,
 {func}`flanpy.singularity_in_k`), the local expansion at the singularity
 ({func}`flanpy.local_expansion`, {func}`flanpy.local_expansion_in_k`) and the
-asymptotics of the coefficients at a fixed $k$ ({func}`flanpy.asymptotics`) are
-implemented so far, and the public API is not stable.
+asymptotics of the coefficients ({func}`flanpy.asymptotics`,
+{func}`flanpy.asymptotics_in_k`, {func}`flanpy.ratio`) are implemented so far, and the public API is not stable.
 ```
 
 ## Pipeline
@@ -129,11 +129,18 @@ $ pip install flanpy
 
 .. autofunction:: flanpy.asymptotics
 
+.. autofunction:: flanpy.asymptotics_in_k
+
 .. autoclass:: flanpy.Asymptotics
-   :members: expansion, rho, exponent, leading, terms, error_exponent, evalf, as_expr, k, kset
+   :members: expansion, rho, exponent, leading, terms, error_exponent, evalf, as_expr, k, kset, specialize
 
 .. autoclass:: flanpy.GammaConstant
-   :members: algebraic, gamma, evalf, as_expr
+   :members: algebraic, rational, factors, gamma, evalf, as_expr, at
+
+.. autofunction:: flanpy.ratio
+
+.. autoclass:: flanpy.Ratio
+   :members: numerator, denominator, exponent, limit, terms, evalf, k, kset, specialize
 ```
 
 Well-posedness of a {class}`~flanpy.System` follows

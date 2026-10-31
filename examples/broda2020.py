@@ -29,8 +29,11 @@
 # - Step 5 (Newton-Puiseux): done, $\alpha = 1/2$ for $R_k$, $L_k$ (eq. (32)) and $F_k$
 #   for every $k \ge 1$; $b_k$ of $R_k$ (§3.1), $c_k$ of $L_k$ (eq. (34)) and $b_k$ of
 #   $F_k$ exactly, one piece $[1, \infty)$ each; the sign of eq. (37) (see below).
-# - Step 6 (transfer): eqs. (6)-(8) for $R_k$ and $S_k$.
-# - Step 7 (families in $k$): eqs. (35)-(38) and Table 1.
+# - Step 6 (transfer): done, eq. (6) for $R_k$; eq. (8),
+#   $[z^n] S_k / (n [z^n] R_k) \to \rho_k$ exactly (next term $\rho_k/(2n)$); Thm 3.2
+#   for $L_k$ and $F_k$: $[z^n] L_k / (n [z^n] F_k) \to 2/(b_k c_k)$ exactly, one
+#   piece $[1, \infty)$; Table 1's exact limits (see below).
+# - Step 7 (families in $k$): eqs. (35)-(38) (expansions in $1/k$).
 
 # %%
 import time
@@ -57,10 +60,12 @@ from flanpy import (
     KSet,
     SingularityWarning,
     System,
+    asymptotics_in_k,
     eliminate,
     eliminate_in_k,
     local_expansion,
     local_expansion_in_k,
+    ratio,
     series,
     series_in_k,
     singularity,
@@ -381,10 +386,10 @@ for n in (2, 10, 50):
         ]
         assert abs(rho_n.evalf(50) - positive) < mpmath.mpf(10) ** -40
         c = series(ssnf, 1001, k=n)[L]
-        ratio = mpmath.mpf(c[1000].numerator) / c[1000].denominator
-        ratio /= mpmath.mpf(c[1001].numerator) / c[1001].denominator
-        ratio *= (mpmath.mpf(1001) / 1000) ** mpmath.mpf(-0.5)
-        error = abs(ratio / rho_n.evalf(50) - 1)
+        quotient = mpmath.mpf(c[1000].numerator) / c[1000].denominator
+        quotient /= mpmath.mpf(c[1001].numerator) / c[1001].denominator
+        quotient *= (mpmath.mpf(1001) / 1000) ** mpmath.mpf(-0.5)
+        error = abs(quotient / rho_n.evalf(50) - 1)
         assert error < mpmath.mpf(10) ** -6
     value = mpmath.nstr(rho_n.evalf(20), 15)
     print(f"k = {n}: rho_k = {value}, ratio error {mpmath.nstr(error, 2)}")
@@ -498,9 +503,9 @@ for n in (2, 10, 50, 54, 108):
         p_prime = 12 * kk * (2 * kk + 27) * r**2 + 72 * kk * r - kk
         h_vv = 2 * kk * r * ((kk + 12) * kk * r**2 + 4 * kk * r + 1)
         assert abs(c_n.evalf(50) - mpmath.sqrt(2 * r * p_prime / h_vv)) < 1e-40
-        ratio = c_n.evalf(30) * mpmath.sqrt(kk) / 4
+        c_scaled = c_n.evalf(30) * mpmath.sqrt(kk) / 4
     value = mpmath.nstr(c_n.evalf(20), 15)
-    print(f"k = {n}: c_k = {value}, c_k sqrt(k)/4 = {mpmath.nstr(ratio, 4)}")
+    print(f"k = {n}: c_k = {value}, c_k sqrt(k)/4 = {mpmath.nstr(c_scaled, 4)}")
 assert e_l.c.at(54).polynomial.as_expr() == 49 * y**2 - 15
 
 # %% [markdown]
@@ -527,3 +532,107 @@ for n in (2, 10, 50, 108):
         f"k = {n}: b_k = {mpmath.nstr(b_n.evalf(20), 15)}, b_k/sqrt(k) = "
         f"{mpmath.nstr(b_n.evalf(20) / mpmath.sqrt(n), 6)}"
     )
+
+# %% [markdown]
+# ## Step 6: the coefficients
+#
+# {func}`flanpy.asymptotics_in_k` transfers the local expansions to the coefficients
+# (Thm 3.1, FS Cor. VI.1): $[z^n] w \sim -b/\Gamma(-\alpha)\, \rho^{-n} n^{-\alpha-1}$
+# in Case I and $1/(c\, \Gamma(\alpha))\, \rho^{-n} n^{\alpha-1}$ in Case II
+# (Thm 3.2). The leading constants are exact monomials in the {class}`flanpy.KRoot` s
+# of step 5, here with $\Gamma(1/2) = \sqrt\pi$.
+#
+# ### $R_k$: eq. (6)
+#
+# $[z^n] R_k \sim \sqrt{2 - 2\rho_k}/(8\rho_k\sqrt\pi)\, \rho_k^{-n} n^{-3/2}$, that is
+# $\tfrac12 b_k/\Gamma(1/2)$; at $k = 2$, three non-zero terms are within $10^{-9}$ of
+# the exact coefficient at $n = 1000$.
+
+# %%
+r_asym = asymptotics_in_k(r_local)
+((piece, a_r),) = r_asym.pieces
+print(piece, a_r.exponent, a_r.leading.rational, a_r.leading.gamma)
+assert a_r.exponent == Fraction(-3, 2) and a_r.leading.factors == ((e_r.b, 1),)
+for n in (1, 2, 10, 50):
+    with mpmath.workdps(50):
+        rho_n = e_r.singularity.rho.at(n).evalf(50)
+        closed = mpmath.sqrt(2 - 2 * rho_n) / (8 * rho_n * mpmath.sqrt(mpmath.pi))
+        assert abs(a_r.leading.at(n).evalf(45) - closed) < mpmath.mpf(10) ** -40
+r_2 = a_r.specialize(K)
+exact = series(rs, 1000, k=K)[R][1000]
+errors = [abs(r_2.evalf(1000, count=c, dps=30) / exact - 1) for c in (1, 3, 5)]
+print([f"{float(x):.1e}" for x in errors])
+assert errors[2] < 1e-9
+
+# %% [markdown]
+# ### Stars: eq. (8)
+#
+# $S_k$ is in Case II ($\alpha = 1/2$), $R_k$ in Case I, at the same $\rho_k$. The
+# probability that a symbol is a star is the ratio
+# $[z^n] S_k / (n [z^n] R_k) \to \rho_k$ (eq. (8)). {func}`flanpy.ratio` gives the limit
+# as the monomial $2 b_k^{-1} c_k^{-1}$ (the $\sqrt\pi$ cancel), which equals $\rho_k$
+# exactly at every $k$ checked, and the next term: the ratio is
+# $\rho_k (1 + \tfrac{1}{2n} + O(n^{-2}))$.
+
+# %%
+s_asym = asymptotics_in_k(local_expansion_in_k(singularity_in_k(s_cases)))
+((piece, star_ratio),) = s_asym.combine(r_asym, ratio).pieces
+print(piece, star_ratio.exponent, star_ratio.limit.rational, star_ratio.limit.gamma)
+assert star_ratio.exponent == 1 and star_ratio.limit.gamma == ()
+for n in range(1, 7):
+    fixed = star_ratio.specialize(n)
+    rho_n = e_r.singularity.rho.at(n)
+    assert star_ratio.limit.at(n).algebraic() == rho_n == fixed.limit.algebraic()
+    next_term = fixed.terms(3)[2][1].algebraic()
+    with mpmath.workdps(40):
+        assert abs(next_term.evalf(30) - rho_n.evalf(30) / 2) < 1e-25
+
+# %% [markdown]
+# ### Letters in ssnf: Thm 3.2, eq. (38) and Table 1
+#
+# $L_k$ counts the letters and $F_k$ the expressions of size $n$ (Case I), at the same
+# $\rho_k$, so the probability that a symbol is a letter is
+# $[z^n] L_k / (n [z^n] F_k) \to 2/(b_k c_k)$ (Thm 3.2). With eq. (20)'s $b_k > 0$ the
+# limit is $2/(b_k c_k)$; eq. (38) writes $-2/(b_k c_k)$ with $-b_k$ (the sign
+# convention of step 5, above). flanpy gives it exactly, one piece $[1, \infty)$, for
+# every $k \ge 1$: at $k = 54$ it is $7/15$.
+#
+# Table 1 compares a simulation (10000 random expressions in ssnf of size $n = 1000$)
+# with the approximation $\tfrac12 - \tfrac{1}{4\sqrt 2 \sqrt k}$ of eq. (38). The exact
+# limits fit the simulation better at $k = 2$ ($0.4173$ vs the simulated $0.42$, while
+# the approximation gives $0.375$); at $k = 10$ and $50$ the exact limits round to the
+# simulated values, and the approximation is within $0.005$ of them. At $n = 1000$ the
+# ratio is the limit plus a term in $1/n$, as computed below.
+
+# %%
+l_asym, f_asym = asymptotics_in_k(l_local), asymptotics_in_k(f_local)
+((piece, letters),) = l_asym.combine(f_asym, ratio).pieces
+assert piece == KSet.all() and letters.exponent == 1 and letters.limit.rational == 2
+assert set(letters.limit.factors) == {(e_l.c, -1), (e_f.b, -1)}
+simulated = {2: 0.42, 10: 0.44, 50: 0.47}
+print(" k   exact limit      Table 1   eq. (38)   n^-1 term")
+for n in (2, 10, 50, 54, 108):
+    limit = letters.limit.at(n).algebraic()
+    approx = 0.5 - 1 / (4 * mpmath.sqrt(2 * n))
+    next_term = letters.specialize(n).terms(3)[2][1].algebraic()
+    shown = simulated.get(n, "")
+    print(
+        f"{n:3}   {mpmath.nstr(limit.evalf(15), 12):14}   {shown!s:7}   "
+        f"{mpmath.nstr(approx, 4):8}   {mpmath.nstr(next_term.evalf(15), 6)}"
+    )
+    if n in simulated:
+        assert abs(limit.evalf(15) - simulated[n]) <= abs(approx - simulated[n]) + 0.005
+assert letters.limit.at(54).algebraic() == Fraction(7, 15)
+limit_2 = letters.limit.at(2).algebraic().evalf(20)
+assert abs(limit_2 - mpmath.mpf("0.417256345028")) < 1e-12
+
+# %% [markdown]
+# At $n = 1000$ and $k = 2$, against the exact coefficients: the limit alone is off by
+# $10^{-3}$, and with the $1/n$ term by $10^{-8}$.
+
+# %%
+fixed = letters.specialize(K)
+exact = Fraction(series(ssnf, 1000, k=K)[L][1000]) / series(fk, 1000, k=K)[F][1000]
+errors = [abs(fixed.evalf(1000, count=c, dps=30) / exact - 1) for c in (1, 3)]
+print([f"{float(x):.1e}" for x in errors])
+assert errors[0] < 1.2e-3 and errors[1] < 5e-8
