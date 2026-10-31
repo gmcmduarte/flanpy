@@ -1,6 +1,6 @@
 # Design note: `transfer`
 
-Status: approved 2026-10-31 (decisions in Section 12). Chunk 2 (fixed `k`) in progress.
+Status: approved 2026-10-31 (decisions in Section 12). Implemented: chunk 2 (`_transfer.py` at a fixed `k`).
 
 Build-order step 6. From a `LocalExpansion` (step 5): the **asymptotic expansion of
 the coefficients** `[z^n] w` (FS Thm VI.4, Thm VII.8). That means the leading term

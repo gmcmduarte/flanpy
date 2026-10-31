@@ -2,7 +2,7 @@
 
 Open-source Python package implementing the analytic-combinatorics toolchain used by our research group (Broda, Machiavelo, Moreira, Reis, and Guilherme), so that papers can ship a runnable script that reproduces their results, instead of Mathematica files.
 
-This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`), 2 (`KSet`), 3 (`elimination`), 4 (`singularity`) and 5 (`newton`) are implemented; the later steps are not. Update this file when decisions change.
+This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`), 2 (`KSet`), 3 (`elimination`), 4 (`singularity`) and 5 (`newton`) are implemented; step 6 (`transfer`) is in progress (fixed `k` done); the later steps are not. Update this file when decisions change.
 
 ## What the package does
 
@@ -93,6 +93,15 @@ Reference papers (in Guilherme's Zotero library):
 - **Symbolic `k`**: the constant is a `KRoot` **relative to `ρ_k`** (`KRoot(Φ, j, k=k, over=rho_k)`: the `j`-th distinct positive root of `Φ(y, ρ_k, k)`; `Φ` need not be irreducible; reduced modulo `f` over `Q(k)`). An absolute `KRoot` of the norm would split `L_k` at 54/55 (a conjugate of `ρ_k` adds a positive root). `a_k = -s_10/s_11 (ρ_k)` (first subresultant). Cut set: step 4's `P1 ∪ P2(f)` and `P5` (`Res_z(f, s_11)`, `Res_z(f, lc_w G)`, `Res_z(f, q_ij)` on the generic hull, `Res_z(f, disc Φ_E)`); proposition and proof in the Notes of `local_expansion_in_k`. Gaps (`NotImplementedError` naming the piece; fixed `k` works): `a_k` not a rational function of `ρ_k`, a first-level tie.
 - **Results**: Catalan `b = 2`; Motzkin = FS Example VII.18's printed terms; HG `A_k`, Broda `R_k` closed forms for `k = 1..20`; `L_k`: one piece `[1, ∞)`, Case II, `α = 1/2`, `c_k` = eq. (34) exactly (`c_54 = √15/7`), `at(n)` = fixed `k` for `k = 1..60`, 108; `F_k`: one piece, `b_k > 0`, `b_k/√k → 1` (`b_54 = 2√15`); `K = kU/4 + K^2`: pieces `{1}`, `{2}` (`α = 1/4`), `[3, ∞)`, cut at 2 by the hull vertex `(2, 0)`. At `n = 1000` the transfer of the exact terms is within `1e-8..4e-6` (`L_k` 5 terms `8.9e-11`). Times: `local_expansion` 3–30 ms after step 4; `local_expansion_in_k` `L_k` 0.68 s, `F_k` 0.83 s (flint and pure Python alike).
 
+### Step 6: `transfer` (design note: `dev/design/transfer.md`)
+
+- **Public API (fixed `k`, chunk 2)**: `flanpy.asymptotics(expansion, *, k=None) -> Asymptotics[AlgebraicReal]` (`k=n` on a symbolic piece specializes it); `flanpy.Asymptotics` (`expansion`, `rho`, `exponent` β, `leading` C, `terms(count)`, `error_exponent(count)`, `evalf(n, *, count=1, dps=15)`, `as_expr(n, *, count=1)`, `k`, `kset`); `flanpy.GammaConstant` (`algebraic()` = the `AlgebraicReal` part, `gamma` = pairs `(ν, m)` for `Π Γ(ν)^m`, `evalf` = the full value, `as_expr`). `[z^n] w = ρ^{-n} Σ_j D_j n^{-1-p_j} + O(ρ^{-n} n^e)`, `p_j = e_0 + j/κ`, `e_0 = α` (I) / `-α` (II). Planned for chunk 3: `ratio`, `Ratio`, `asymptotics_in_k`.
+- **Naming**: a number of terms is `count`, never `n` (`n` is the coefficient index), and counts the `D_j` **including zeros** (Catalan `count=5` = 3 non-zero terms). Step 5's `LocalExpansion.terms(count)` was renamed likewise (pre-0.1.0, no deprecation).
+- **Refusals**: `unique is False` -> `ValueError` naming the period (FS Thm VI.5 needed; periodic `w = z^r V(z^p)` is the cheap route later, transfer.md §1.2); `unique is None` -> `ValueError` "undecided". No new exception class.
+- **Method**: each Puiseux term `d s^x` transfers by FS Thm VI.1, `e_l` exact in `Q[a]` from Stirling's series (DLMF 5.11.8, Bernoulli polynomials, recurrence `l e_l = Σ j s_j e_{l-j}`, cached); `D_j` collects one class of `x` mod 1, so `D_j = A_j/Γ(ν_j)` with `1/Γ(-x) = r/Γ(ν)` by the recurrence; `A_j` computed in step 5's branch field (`LocalExpansion._field_terms`), exact. `D_j = 0` whenever `p_j` is a non-negative integer (analytic terms; poles terminate); `error_exponent` skips those, never accidental zeros; `None` when `κ = 1` (remainder `O((ρ + ε)^{-n})`). Case I needs `count + 1` Puiseux terms, Case II `count`.
+- **Γ form**: stored as FS/Broda print it, `Γ(ν)`, `0 < ν < 1` (`α = 1/4`: `1/(8Γ(3/4))`); equality compares `(A, Γ part)`, exact for single-base constants (all of chunk 2); the reflection key is for products (chunk 3). `as_expr`: radicals for degree <= 2, `CRootOf` above. `O`-terms only (explicit bounds later, transfer.md §4).
+- **Numerics**: `evalf` is the `n`-expansion (as accurate as step 5's Γ-ratio helper at equal Puiseux depth, and what the papers print; the helper is gone). `ρ` at `dps + len(str(n)) + 10` digits. At `n = 1000` with 1/2/3 non-zero terms: Catalan `1.1e-3/1.1e-6/1.1e-9`; `F_k` (`k` in {2, 10, 50, 54, 108}) `<= 8.0e-4/8.4e-7/8.6e-10`; `L_k` `<= 2.4e-4/3.9e-8/3.6e-11`.
+
 ## Planned layout
 
 Flat private modules (`_name.py`), re-exported from `flanpy`, as in steps 1–5; a
@@ -122,7 +131,9 @@ src/flanpy/
   _newton.py     LocalExpansion, local_expansion / local_expansion_in_k: local problem,
                  Newton polygon, real branches, rank test, Hensel lifting, cut set in k
                  (design: dev/design/newton.md); re-exported from flanpy
-  _transfer.py   Thm 3.1 / 3.2, square-root case
+  _transfer.py   GammaConstant, Asymptotics, asymptotics: transfer of the local expansion
+                 (FS Thm VI.1/VI.4/VII.8, Broda Thm 3.2, HG Prop. 4), e_l polynomials,
+                 Γ classes, evalf (design: dev/design/transfer.md); re-exported from flanpy
   _families.py   expansions in 1/k
   _symbolic.py   grammar -> equations, bivariate cost series (d/du at u=1)
   _automata.py   thin regex/NFA front-end (cost vectors c_empty..c_star); optional
@@ -229,6 +240,7 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - Broda 2020 §3.4, uniqueness for `k > 54`: as extracted, the argument writes `µ_k = 1/(k(2k + 27)ρ_k^2) > 0`; the product of the roots gives `−1/(k(2k + 27)ρ_k^2) < 0`, so there is no contradiction, and `−ρ_k` is a root exactly at `k = 108`. The conclusion stands (design note §5.5). To check against the printed text, then raise with the authors.
 - Pivoteau–Salvy 2025, Algorithm Irr-DS (§7.3), nonlinear branch drops the dominant singularities of critical inputs (a period-1 component fed by a period-2 critical input is singular at `−1`; design note §5.5, test `test_critical_input_is_singular_at_minus_one`). To check against the printed text, then raise with the authors (low priority).
 - Confirm the Broda 2020 eq. (5) erratum with the authors (see Decisions, step 1).
+- FS Note VI.3 (p. 383), as extracted, lacks a sign: `e_k = Σ_ℓ λ_{k,ℓ} (−1)^ℓ (α − 1)…(α − ℓ)` matches eq. (13) (`λ_{1,1} = −1`, `λ_{1,2} = 1/2`; confirmed in review). Our reading, not an erratum; check the printed page (low priority; the code uses the Bernoulli recurrence).
 - Broda 2020 eqs. (37)-(38) use -b_k relative to eq. (20)'s b (b_k > 0 by monotonicity); the limit 1/2 stands; check the printed eqs. (20), (37), (38), then raise with the authors.
 - PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
 - Remaining technical risk: Case I curves with larger systems, where the Groebner step may be slow. Non-radical roots are handled by the number fields of step 5. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.
