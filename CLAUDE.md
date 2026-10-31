@@ -2,7 +2,7 @@
 
 Open-source Python package implementing the analytic-combinatorics toolchain used by our research group (Broda, Machiavelo, Moreira, Reis, and Guilherme), so that papers can ship a runnable script that reproduces their results, instead of Mathematica files.
 
-This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`), 2 (`KSet`), 3 (`elimination`), 4 (`singularity`) and 5 (`newton`) are implemented; step 6 (`transfer`) is in progress (fixed `k` done); the later steps are not. Update this file when decisions change.
+This file holds the project's context, decisions and base rules. Build-order steps 1 (`System`, `series`), 2 (`KSet`), 3 (`elimination`), 4 (`singularity`), 5 (`newton`) and 6 (`transfer`) are implemented; the later steps are not. Update this file when decisions change.
 
 ## What the package does
 
@@ -95,11 +95,16 @@ Reference papers (in Guilherme's Zotero library):
 
 ### Step 6: `transfer` (design note: `dev/design/transfer.md`)
 
-- **Public API (fixed `k`, chunk 2)**: `flanpy.asymptotics(expansion, *, k=None) -> Asymptotics[AlgebraicReal]` (`k=n` on a symbolic piece specializes it); `flanpy.Asymptotics` (`expansion`, `rho`, `exponent` β, `leading` C, `terms(count)`, `error_exponent(count)`, `evalf(n, *, count=1, dps=15)`, `as_expr(n, *, count=1)`, `k`, `kset`); `flanpy.GammaConstant` (`algebraic()` = the `AlgebraicReal` part, `gamma` = pairs `(ν, m)` for `Π Γ(ν)^m`, `evalf` = the full value, `as_expr`). `[z^n] w = ρ^{-n} Σ_j D_j n^{-1-p_j} + O(ρ^{-n} n^e)`, `p_j = e_0 + j/κ`, `e_0 = α` (I) / `-α` (II). Planned for chunk 3: `ratio`, `Ratio`, `asymptotics_in_k`.
+- **Public API (fixed `k`, chunk 2)**: `flanpy.asymptotics(expansion, *, k=None) -> Asymptotics[AlgebraicReal]` (`k=n` on a symbolic piece specializes it); `flanpy.Asymptotics` (`expansion`, `rho`, `exponent` β, `leading` C, `terms(count)`, `error_exponent(count)`, `evalf(n, *, count=1, dps=15)`, `as_expr(n, *, count=1)`, `k`, `kset`); `flanpy.GammaConstant` (`algebraic()` = the `AlgebraicReal` part, `gamma` = pairs `(ν, m)` for `Π Γ(ν)^m`, `evalf` = the full value, `as_expr`). `[z^n] w = ρ^{-n} Σ_j D_j n^{-1-p_j} + O(ρ^{-n} n^e)`, `p_j = e_0 + j/κ`, `e_0 = α` (I) / `-α` (II).
+- **Public API (chunk 3)**: `flanpy.ratio(A, B) -> Ratio` (`numerator`, `denominator`, `exponent` = `β_A - β_B`, `limit` = `C_A/C_B` exact, `terms(count)`, `evalf(n, *, count=1, dps=15)`, `specialize`, `k`, `kset`); `flanpy.asymptotics_in_k(LocalExpansion[KRoot] | KCases) -> KCases[Asymptotics[KRoot]]` (one piece per step 5 piece, no new cuts, `uncovered` kept); `Asymptotics.specialize`; `GammaConstant.rational`, `.factors`, `.at(n)`, `*`, `/` (also by `int`/`Fraction`). Ratios in `k`: `cases_a.combine(cases_b, ratio)`; `KCases.combine` now calls `f` only on non-empty intersections (it dropped empty pieces anyway; needed because pieces with no common `k` may have different `ρ_k`).
+- **Ratios**: same `ρ` by exact equality (`AlgebraicReal`, or structural `KRoot`), else `ValueError` (the factor `(ρ_B/ρ_A)^n` is not represented); also refused: fixed `k` vs symbolic, different `k` (fixed), no common `k` (symbolic). `q_j` by series division in one number field (`_common_field`: real roots of `m_θ2` over `K1`, step 5's Trager machinery). `q_j` is one `Γ` monomial when every non-zero `B_i` has `B_0`'s `Γ` class; otherwise `terms` raises `NotImplementedError` from that index (a sum of `Γ` monomials, e.g. a pole plus a square root in the denominator), and `evalf` (numeric series division) still works.
+- **Symbolic `k` constants**: the algebraic part is the monomial `rational · Π factors` (`KRoot`s with integer exponents; `1/c_k` is `(c_k, -1)`, no new `KRoot`): Case I `α b_k/Γ(1 - α)`, Case II `r c_k^{-1}/Γ(ν)`. `algebraic()`, `evalf`, `as_expr` raise `ValueError` for symbolic `k`; `at(n)` evaluates the monomial exactly (`_monomial`: products in one number field). At a fixed `k`, `factors` is `()` (rational `A`, `rational = A`) or `((A, 1),)` (`rational = 1`). Further terms for symbolic `k` are out of scope (step 5 has no Hensel lifting over `Q(k)(ρ_k, b_k)`).
+- **Γ key** (for `==`, `hash`): `Γ(1/2) = π^{1/2}`, `Γ(ν)` with `ν > 1/2` by reflection `π/(sin(πν)Γ(1 - ν))`, `sin(πν)` exact (`_sin_pi`: `cos(2πa/N)`, index from the exact order of its conjugates `cos(2πa'/N)`), moved into the algebraic part; so `Γ(1/4)Γ(3/4) == √2 π`. Decides equality for `κ <= 4` (known algebraic independence of `π`, `Γ(1/4)`).
+- **Results**: Broda Thm 3.2 / eq. (38) / Table 1: `[z^n] L_k / (n [z^n] F_k) → 2/(b_k c_k)`, exact limits `0.417256345028`, `0.443252417412`, `0.465746500119` (`k = 2, 10, 50`; cubic minimal polynomials), `7/15` at 54, `0.474216576937` at 108 (agree with review's Richardson extrapolation to 12 digits); `n^{-1}` coefficients `0.421941, 0.450121, 0.473185, 0.474074, 0.481125`; at `n = 1000` the limit plus the `1/n` term is within `2e-8`. Table 1's simulation (`0.42, 0.44, 0.47`) fits the exact limits better than eq. (38)'s approximation at `k = 2` (`0.375`). Eq. (8): `[z^n] S_k / (n [z^n] R_k) = ρ_k (1 + 1/(2n) + ...)` exactly (`k = 1..10`). Symbolic: `L_k`, `F_k`, `R_k`, `A_k` one piece; `L_k/F_k` = `2 b_k^{-1} c_k^{-1}` on `[1, ∞)`, `at(n)` = fixed `k` for `k = 1..60`, 108; `K = kU/4 + K^2`: `{1}`, `{2}` (`Γ(3/4)`), `[3, ∞)`.
 - **Naming**: a number of terms is `count`, never `n` (`n` is the coefficient index), and counts the `D_j` **including zeros** (Catalan `count=5` = 3 non-zero terms). Step 5's `LocalExpansion.terms(count)` was renamed likewise (pre-0.1.0, no deprecation).
 - **Refusals**: `unique is False` -> `ValueError` naming the period (FS Thm VI.5 needed; periodic `w = z^r V(z^p)` is the cheap route later, transfer.md §1.2); `unique is None` -> `ValueError` "undecided". No new exception class.
 - **Method**: each Puiseux term `d s^x` transfers by FS Thm VI.1, `e_l` exact in `Q[a]` from Stirling's series (DLMF 5.11.8, Bernoulli polynomials, recurrence `l e_l = Σ j s_j e_{l-j}`, cached); `D_j` collects one class of `x` mod 1, so `D_j = A_j/Γ(ν_j)` with `1/Γ(-x) = r/Γ(ν)` by the recurrence; `A_j` computed in step 5's branch field (`LocalExpansion._field_terms`), exact. `D_j = 0` whenever `p_j` is a non-negative integer (analytic terms; poles terminate); `error_exponent` skips those, never accidental zeros; `None` when `κ = 1` (remainder `O((ρ + ε)^{-n})`). Case I needs `count + 1` Puiseux terms, Case II `count`.
-- **Γ form**: stored as FS/Broda print it, `Γ(ν)`, `0 < ν < 1` (`α = 1/4`: `1/(8Γ(3/4))`); equality compares `(A, Γ part)`, exact for single-base constants (all of chunk 2); the reflection key is for products (chunk 3). `as_expr`: radicals for degree <= 2, `CRootOf` above. `O`-terms only (explicit bounds later, transfer.md §4).
+- **Γ form**: stored as FS/Broda print it, `Γ(ν)`, `0 < ν < 1` (`α = 1/4`: `1/(8Γ(3/4))`); the reflection key is only for `==` and `hash` (below). `as_expr`: radicals for degree <= 2, `CRootOf` above. `O`-terms only (explicit bounds later, transfer.md §4).
 - **Numerics**: `evalf` is the `n`-expansion (as accurate as step 5's Γ-ratio helper at equal Puiseux depth, and what the papers print; the helper is gone). `ρ` at `dps + len(str(n)) + 10` digits. At `n = 1000` with 1/2/3 non-zero terms: Catalan `1.1e-3/1.1e-6/1.1e-9`; `F_k` (`k` in {2, 10, 50, 54, 108}) `<= 8.0e-4/8.4e-7/8.6e-10`; `L_k` `<= 2.4e-4/3.9e-8/3.6e-11`.
 
 ## Planned layout
@@ -131,9 +136,11 @@ src/flanpy/
   _newton.py     LocalExpansion, local_expansion / local_expansion_in_k: local problem,
                  Newton polygon, real branches, rank test, Hensel lifting, cut set in k
                  (design: dev/design/newton.md); re-exported from flanpy
-  _transfer.py   GammaConstant, Asymptotics, asymptotics: transfer of the local expansion
-                 (FS Thm VI.1/VI.4/VII.8, Broda Thm 3.2, HG Prop. 4), e_l polynomials,
-                 Γ classes, evalf (design: dev/design/transfer.md); re-exported from flanpy
+  _transfer.py   GammaConstant, Asymptotics, asymptotics, asymptotics_in_k, Ratio, ratio:
+                 transfer of the local expansion (FS Thm VI.1/VI.4/VII.8, Broda Thm 3.2,
+                 HG Prop. 4), e_l polynomials, Γ classes and the reflection key, ratios
+                 in one number field, monomials in KRoots for symbolic k
+                 (design: dev/design/transfer.md); re-exported from flanpy
   _families.py   expansions in 1/k
   _symbolic.py   grammar -> equations, bivariate cost series (d/du at u=1)
   _automata.py   thin regex/NFA front-end (cost vectors c_empty..c_star); optional
@@ -236,6 +243,8 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - [x] Build-order step 3 (`elimination`): done 2026-10-30 (PR #5).
 - [x] Build-order step 4 (`singularity`): done 2026-10-30 (PR #6).
 - [x] Build-order step 5 (`newton`): done 2026-10-31 (PR #7).
+- [x] Build-order step 6 (`transfer`): done (PR #8).
+- Step 7: `2/(b_k c_k) ∈ Q(ρ_k)` at every sampled `k` (it is `-ρ'(1)/ρ(1)` for the letter-marking parameter), so eq. (38) may need only `ρ_k`'s expansion (eq. (35)): reduce the limit to `A(ρ_k, k)`, `A ∈ Q(k)[z]`, by `A^2 ≡ 4 D_b D_c/(N_b N_c) (mod f)` (transfer.md §7.3).
 - Broda 2020 §3.4 prints `res_w(G, ∂G/∂w)` as a rational function; it differs from the computed resultant `k^3 z^3 p_k^2 q_k^2`; the conclusion stands; to confirm with the authors (not an erratum).
 - Broda 2020 §3.4, uniqueness for `k > 54`: as extracted, the argument writes `µ_k = 1/(k(2k + 27)ρ_k^2) > 0`; the product of the roots gives `−1/(k(2k + 27)ρ_k^2) < 0`, so there is no contradiction, and `−ρ_k` is a root exactly at `k = 108`. The conclusion stands (design note §5.5). To check against the printed text, then raise with the authors.
 - Pivoteau–Salvy 2025, Algorithm Irr-DS (§7.3), nonlinear branch drops the dominant singularities of critical inputs (a period-1 component fed by a period-2 critical input is singular at `−1`; design note §5.5, test `test_critical_input_is_singular_at_minus_one`). To check against the printed text, then raise with the authors (low priority).

@@ -1,6 +1,8 @@
 # Design note: `transfer`
 
-Status: approved 2026-10-31 (decisions in Section 12). Implemented: chunk 2 (`_transfer.py` at a fixed `k`).
+Status: approved 2026-10-31 (decisions in Section 12). Implemented: chunk 2
+(`_transfer.py` at a fixed `k`) and chunk 3 (ratios, symbolic `k`; Section 13). Step 6
+is complete.
 
 Build-order step 6. From a `LocalExpansion` (step 5): the **asymptotic expansion of
 the coefficients** `[z^n] w` (FS Thm VI.4, Thm VII.8). That means the leading term
@@ -630,3 +632,29 @@ one**):
 - **Q9**: no shortcut now; revisit when writing the 0.1.0 README.
 - **Q10**: chunks as in Section 11; 0.1.0 as a separate PR after this one.
 - **Review changes**: a number of terms is `count`, never `n`, and counts the `D_j` including zeros (Sections 2.3, 2.4, 8, 9; `LocalExpansion.terms` renamed in chunk 2); `GammaConstant.value()` is `algebraic()` (the `Γ` part excluded; `evalf` is the full value), and the field of algebraic factors is `factors`; the FS Note VI.3 sign reading confirmed in review (a low-priority open item); Chudnovsky cited only from a verified source and only if the docs state the `κ = 4` canonicity.
+
+## 13. Implementation notes (chunk 3)
+
+- **`GammaConstant` for symbolic `k`**: the algebraic part is exposed as the monomial
+  `rational · Π factors` (`factors`: pairs `(KRoot, m)`); `algebraic()`, `evalf` and
+  `as_expr` raise `ValueError` there, and `at(n)` evaluates the monomial exactly. At a
+  fixed `k`, `factors` is `()` or `((A, 1),)`, so the fixed-`k` API of chunk 2 is
+  unchanged. `*` and `/` (with `int`, `Fraction` too) multiply exactly, in one number
+  field (`_common_field`, `_monomial`).
+- **The reflection key** (Section 3.2) is implemented for `==` and `hash`, with
+  `sin(πν)` exact (`_sin_pi`, from the order of the conjugates `cos(2πa'/N)`); it is
+  computed once per constant. `Γ(1/4)Γ(3/4) == √2 π` and
+  `√π/(8Γ(3/4)) == √2 Γ(1/4)/(16√π)` are tests.
+- **Ratios whose terms mix `Γ` classes**: Section 6.1's "with different `Γ` classes,
+  `q_j` keeps a `Γ` monomial" holds when the denominator's non-zero coefficients are
+  all in `B_0`'s class (every `κ = 2` square-root case, and any numerator). Otherwise
+  (e.g. `T` over `T/(1 - 4z)`: a pole and a square root in the denominator) `q_j` is a
+  sum of several monomials: `terms` raises `NotImplementedError` from that index, and
+  `evalf` (numeric series division) works.
+- **`KCases.combine`** calls `f` only on non-empty intersections (it dropped empty pieces
+  anyway). Without this, `combine(other, ratio)` would call `ratio` on pairs of pieces
+  with no common `k`, which may have different `ρ_k`.
+- **Measured**: Section 6.2's limits agree with review's independent values (Richardson
+  extrapolation of `series` to `n = 3000`) to 12 digits; at `n = 1000` the limit plus the
+  `n^{-1}` term is within `7.4e-9` (`k = 2`). `T/(1 - 4z)` over Catalan at `n = 1000`,
+  4 terms: `1.4e-7`.
