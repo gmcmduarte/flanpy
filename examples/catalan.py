@@ -20,7 +20,8 @@
 # - Step 1 (`System`, `series`): done, the coefficients below.
 # - Step 3 (elimination): done, the curve $G(z, F) = z F^2 - F + 1$ below.
 # - Step 4 (singularity): done, $\rho = 1/4$, Case I, $a = F(\rho) = 2$, unique.
-# - Step 5 (Newton-Puiseux): $\alpha = 1/2$ in $F = 2 - 2 (1 - 4z)^{1/2} + \dots$
+# - Step 5 (Newton-Puiseux): done, $F = 2 - 2 s^{1/2} + 2 s - \dots$ with $s = 1 - 4z$:
+#   $\alpha = 1/2$, $b = 2$.
 # - Step 6 (transfer): $[z^n] F \sim 4^n n^{-3/2} / \sqrt{\pi}$.
 # - Step 2 (`KSet`): does not apply, there is no parameter (see below).
 # - Step 7 (families in $k$): does not apply, there is no parameter.
@@ -39,7 +40,7 @@ from math import comb
 
 from sympy import symbols
 
-from flanpy import System, eliminate, series, singularity
+from flanpy import System, eliminate, local_expansion, series, singularity
 
 z, F = symbols("z F")
 catalan = System({F: 1 + z * F**2}, z=z)
@@ -87,3 +88,25 @@ assert s.rho == Fraction(1, 4) and s.rho.polynomial.as_expr() == 4 * z - 1
 assert s.case == "I" and s.a == 2
 assert s.period == 1 and s.unique is True
 assert curve.as_expr().subs(z, Fraction(1, 4)).factor() == (F - 2) ** 2 / 4
+
+# %% [markdown]
+# ## Step 5: the local expansion
+#
+# At $\rho = 1/4$, with $s = 1 - 4z$, the solution of $G = 0$ that is the series is
+# $F = 2/(1 + \sqrt{s}) = 2 - 2 s^{1/2} + 2 s - 2 s^{3/2} + \dots$
+# {cite:p}`flajolet-sedgewick-2009` (eq. (81), where $Y \sim \pm 4 Z^{1/2}$ with
+# $Z = s/4$). {func}`flanpy.local_expansion` finds it from the Newton polygon of
+# $G(\rho(1 - s), 2 + Y) = \tfrac14 (Y^2 - 4s - 4sY - sY^2)$: one edge, from $s^1$ to
+# $Y^2$, so the exponent is $\alpha = 1/2$ and the ramification $\kappa = 2$. Of the two
+# real branches $Y \sim \pm 2 s^{1/2}$, the series takes the negative one (it increases
+# to $a = 2$), so $F = 2 - b\, s^{1/2} + \dots$ with $b = 2$
+# {cite:p}`broda-2020-sigact` (eq. (20)).
+
+# %%
+e = local_expansion(s)
+print(e)
+assert (e.alpha, e.ramification) == (Fraction(1, 2), 2) and e.b == 2 and e.c is None
+terms = e.terms(6)
+print([(str(x), str(d)) for x, d in terms])
+assert [x for x, _ in terms] == [Fraction(i, 2) for i in range(6)]
+assert [d for _, d in terms] == [2 * (-1) ** i for i in range(6)]  # 2/(1 + √s)

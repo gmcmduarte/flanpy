@@ -12,9 +12,10 @@ power-series coefficients ({func}`flanpy.series`, {func}`flanpy.series_in_k`),
 sets of alphabet sizes ({class}`flanpy.KSet`, {class}`flanpy.KCases`),
 elimination to one curve ({func}`flanpy.eliminate`, {func}`flanpy.eliminate_in_k`,
 {class}`flanpy.Curve`), exact real algebraic numbers ({class}`flanpy.AlgebraicReal`,
-{class}`flanpy.KRoot`) and the dominant singularity ({func}`flanpy.singularity`,
-{func}`flanpy.singularity_in_k`) are implemented so far, and the public API is not
-stable.
+{class}`flanpy.KRoot`), the dominant singularity ({func}`flanpy.singularity`,
+{func}`flanpy.singularity_in_k`) and the local expansion at the singularity
+({func}`flanpy.local_expansion`, {func}`flanpy.local_expansion_in_k`) are implemented
+so far, and the public API is not stable.
 ```
 
 ## Pipeline
@@ -45,6 +46,7 @@ guide/system
 guide/kset
 guide/elimination
 guide/singularity
+guide/newton
 ```
 
 ## Running examples
@@ -103,7 +105,7 @@ $ pip install flanpy
    :members: polynomial, index, interval, refine, sign, evalf, as_expr
 
 .. autoclass:: flanpy.KRoot
-   :members: polynomial, positive_index, at
+   :members: polynomial, positive_index, over, at
 
 .. autofunction:: flanpy.singularity
 
@@ -115,6 +117,13 @@ $ pip install flanpy
 .. autoexception:: flanpy.UndecidedSingularityError
 
 .. autoexception:: flanpy.SingularityWarning
+
+.. autofunction:: flanpy.local_expansion
+
+.. autofunction:: flanpy.local_expansion_in_k
+
+.. autoclass:: flanpy.LocalExpansion
+   :members: singularity, alpha, ramification, b, c, terms, k, kset, specialize
 ```
 
 Well-posedness of a {class}`~flanpy.System` follows

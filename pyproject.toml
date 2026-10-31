@@ -101,8 +101,9 @@ select = [
 ]
 # KSet prints in set notation: [1, 53] ∪ [55, ∞) (RUF001-RUF003); the singularity
 # docstrings use the papers' notation ρ (radius), σ (a candidate singularity) and ℓ
-# (a lower bound, Pivoteau-Salvy 2025).
-allowed-confusables = ["∪", "ρ", "σ", "ℓ"]
+# (a lower bound, Pivoteau-Salvy 2025); the newton docstrings α (the singular exponent,
+# Broda et al. 2020 eq. (20)) and γ (a Newton-polygon slope).
+allowed-confusables = ["∪", "ρ", "σ", "ℓ", "α", "γ"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

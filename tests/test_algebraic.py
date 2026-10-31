@@ -468,3 +468,89 @@ def test_kroot_against_mpmath(n: int) -> None:
     with mpmath.workdps(50):
         exact = (mpmath.sqrt(8 + 8 * n) - 1) / (7 + 8 * n)
         assert abs(rho.evalf(50) - exact) < mpmath.mpf(10) ** -45
+
+
+# -- KRoot relative to another root (newton.md, section 6.1; Q2) ----------------------
+
+YR = sp.Symbol("y")
+SQRT_K = flanpy.KRoot(z**2 - k, 0, k=k)  # ρ_k = √k
+P_K = 4 * k * (2 * k + 27) * z**3 + 36 * k * z**2 - k * z - 4  # Broda eq. (18)
+# Broda eq. (34): c_k is the positive root of den(ρ_k) y^2 - num(ρ_k).
+EQ34 = ((k**2 + 12 * k) * z**2 + 4 * k * z + 1) * YR**2 - (
+    (24 * k + 324) * z**2 + 72 * z - 1
+)
+
+
+def test_relative_kroot_semantics() -> None:
+    root = flanpy.KRoot(YR**2 - z, 0, k=k, over=SQRT_K)  # k^(1/4)
+    assert root.over == SQRT_K and root.positive_index == 0
+    assert root.polynomial.gens == (YR, z, k)
+    assert root.at(16) == 2
+    assert root.at(2) == flanpy.AlgebraicReal(YR**4 - 2, 1)
+    # Normalised: rational multiples and the name of y do not matter.
+    same = flanpy.KRoot((w**2 - z) / 3, 0, k=k, over=SQRT_K)
+    assert same == root and hash(same) == hash(root)
+    assert root != SQRT_K
+    assert root != flanpy.KRoot(YR**2 - z, 0, k=k, over=flanpy.KRoot(z - k, 0, k=k))
+    assert pickle.loads(pickle.dumps(root)) == root
+    assert repr(root) == "KRoot(y**2 - z, 0, k=k, over=KRoot(-k + z**2, 0, k=k))"
+    assert (
+        str(root) == "positive root 0 of y**2 - z at z = (positive root 0 of -k + z**2)"
+    )
+    # An absolute KRoot is unchanged (no over in repr or key).
+    assert SQRT_K.over is None and repr(SQRT_K) == "KRoot(-k + z**2, 0, k=k)"
+
+
+def test_relative_kroot_repeated_factor() -> None:
+    """Φ need not be irreducible: distinct positive roots are counted once."""
+    phi = (YR**2 - z) ** 2 * (YR + 1) * (YR - 3)
+    assert flanpy.KRoot(phi, 0, k=k, over=SQRT_K).at(2) == flanpy.AlgebraicReal(
+        YR**4 - 2, 1
+    )
+    assert flanpy.KRoot(phi, 1, k=k, over=SQRT_K).at(2) == 3
+    with pytest.raises(ValueError, match="2 positive root"):
+        flanpy.KRoot(phi, 2, k=k, over=SQRT_K).at(2)
+    with pytest.raises(ValueError, match="vanishes identically"):
+        flanpy.KRoot((z**2 - k) * YR, 0, k=k, over=SQRT_K).at(3)
+
+
+def test_relative_kroot_errors() -> None:
+    with pytest.raises(TypeError, match="over must be a KRoot"):
+        flanpy.KRoot(YR - z, 0, k=k, over=z)
+    nested = flanpy.KRoot(YR - z, 0, k=k, over=SQRT_K)
+    with pytest.raises(TypeError, match="without over"):
+        flanpy.KRoot(w - YR, 0, k=k, over=nested)
+    with pytest.raises(ValueError, match="parameter"):
+        flanpy.KRoot(YR - z, 0, k=w, over=SQRT_K)
+    with pytest.raises(ValueError, match="exactly one variable"):
+        flanpy.KRoot(YR - z * w, 0, k=k, over=SQRT_K)
+    with pytest.raises(ValueError, match="got none"):
+        flanpy.KRoot(z - k, 0, k=k, over=SQRT_K)
+
+
+@pytest.mark.parametrize("n", [53, 54, 55, 60, 108])
+def test_relative_index_constant_across_a_conjugate_crossing(n: int) -> None:
+    """Broda L_k: c_k = KRoot(eq. (34), 0, over=ρ_k) at every k (newton.md 6.1).
+
+    The absolute description by the norm h = Res_z(p_k, eq. (34)) changes its
+    positive index from 0 to 1 between 54 and 55: for k >= 55 the two other
+    (negative) real roots of p_k add a positive root of h below c_k.
+    """
+    rho = flanpy.KRoot(P_K, 0, k=k)
+    relative = flanpy.KRoot(EQ34, 0, k=k, over=rho)
+    value = relative.at(n)
+    with mpmath.workdps(50):
+        r, kk = rho.at(n).evalf(50), mpmath.mpf(n)
+        expected = mpmath.sqrt(
+            ((24 * kk + 324) * r**2 + 72 * r - 1)
+            / ((kk**2 + 12 * kk) * r**2 + 4 * kk * r + 1)
+        )
+        assert abs(value.evalf(45) - expected) < mpmath.mpf(10) ** -40
+    (h,) = [
+        f
+        for f, _ in sp.factor_list(sp.resultant(P_K, EQ34, z), YR, k)[1]
+        if sp.Poly(f, YR).degree() == 6
+    ]
+    absolute = flanpy.KRoot(h, 0 if n <= 54 else 1, k=k)
+    assert absolute.at(n) == value
+    assert (flanpy.KRoot(h, 0, k=k).at(n) == value) == (n <= 54)

@@ -520,6 +520,11 @@ def _restore(poly: sp.Poly, index: int, interval: _Interval) -> AlgebraicReal:
 class KRoot:
     """The ``positive_index``-th positive root of ``f(x, k)``, as a function of ``k``.
 
+    With ``over=ρ`` (another ``KRoot``, in ``(z, k)``) it is instead the
+    ``positive_index``-th distinct positive root of ``Φ(y, ρ_k, k)``: a root
+    *relative to* ``ρ_k``. :func:`~flanpy.local_expansion_in_k` describes the
+    constants ``b_k``, ``c_k`` this way (newton.md, section 6.1).
+
     At each ``k = n`` the value is the ``positive_index``-th (from ``0``) of the
     distinct positive real roots of ``f(x, n)``, in increasing order. This is how
     :func:`~flanpy.singularity_in_k` describes ``ρ_k`` and ``a_k`` on a piece of
@@ -532,30 +537,41 @@ class KRoot:
     ``f`` must be irreducible over ``Q(k)``. It is stored normalised: integer
     coefficients, no content in ``Z[k]`` (a factor in ``k`` alone is a unit of
     ``Q(k)``), positive leading coefficient in the lexicographic order ``x > k``.
+    A relative ``Φ`` need not be irreducible; it is stored with integer
+    coefficients, primitive, with a positive leading coefficient in the order
+    ``y > z > k``. A positive index relative to ``ρ_k`` is stable where an absolute
+    one is not: the norm of ``Φ`` over all the conjugates of ``ρ_k`` can gain a
+    positive root as a conjugate crosses a value (Broda's ``L_k`` at 54/55,
+    newton.md, section 6.1), while ``Φ(·, ρ_k, k)`` itself does not.
 
     Parameters
     ----------
     polynomial : sympy.Poly or sympy.Expr
-        A polynomial in one variable ``x`` and ``k`` with rational coefficients.
+        A polynomial in one variable ``x`` and ``k`` with rational coefficients;
+        with ``over``, in ``y``, the variable ``z`` of ``over`` and ``k``.
     positive_index : int
         Which positive root, from ``0``.
     k : sympy.Symbol
         The parameter.
+    over : KRoot, optional
+        The root ``ρ_k`` the polynomial is evaluated at (itself without ``over``).
 
     Raises
     ------
     TypeError
-        If ``positive_index`` is not an integer or ``k`` is not a symbol.
+        If ``positive_index`` is not an integer, ``k`` is not a symbol, or ``over``
+        is not a ``KRoot`` without ``over``.
     ValueError
         If ``positive_index`` is negative, or ``polynomial`` is not a polynomial in
-        one variable besides ``k`` with rational coefficients, or is reducible over
-        ``Q(k)``.
+        one variable besides ``k`` (besides ``z`` and ``k`` with ``over``) with
+        rational coefficients, is reducible over ``Q(k)`` (without ``over``), or
+        ``over`` has another ``k``.
 
     Notes
     -----
     Equality and hashing compare the normalised polynomial (not the names of its
-    variables) and the index. Whether the root exists at a given ``k`` is checked
-    by :meth:`at`. A ``KRoot`` is immutable and can be pickled.
+    variables), the index and ``over``. Whether the root exists at a given ``k`` is
+    checked by :meth:`at`. A ``KRoot`` is immutable and can be pickled.
 
     Examples
     --------
@@ -575,17 +591,36 @@ class KRoot:
     Traceback (most recent call last):
         ...
     ValueError: -k**2 + z**2 is not irreducible over Q(k): factors -k + z, k + z
+
+    Relative to ``ρ_k``: Broda's ``c_k`` (eq. (34)) is the positive root of
+    ``((k^2 + 12k) ρ_k^2 + 4k ρ_k + 1) y^2 - ((24k + 324) ρ_k^2 + 72 ρ_k - 1)``.
+    At ``k = 54``, ``c_54 = √15/7``:
+
+    >>> y = symbols("y")
+    >>> num = (24 * k + 324) * z**2 + 72 * z - 1
+    >>> den = (k**2 + 12 * k) * z**2 + 4 * k * z + 1
+    >>> c = KRoot(den * y**2 - num, 0, k=k, over=rho)
+    >>> c.at(54)
+    AlgebraicReal(49*y**2 - 15, 1)
+    >>> print(c.at(2))
+    2.72525575655134 (root 1 of y**6 - 47*y**4 + 728*y**2 - 3224)
     """
 
-    __slots__ = ("_index", "_k", "_poly", "_terms")
+    __slots__ = ("_index", "_k", "_over", "_poly", "_terms")
 
-    _poly: sp.Poly  # gens (x, k), over ZZ, normalised, irreducible over Q(k)
-    _terms: tuple[tuple[tuple[int, int], int], ...]  # its terms, for == and hash
+    _poly: sp.Poly  # gens (x, k) or (y, z, k), over ZZ, normalised
+    _terms: tuple[tuple[tuple[int, ...], int], ...]  # its terms, for == and hash
     _index: int
     _k: sp.Symbol
+    _over: KRoot | None
 
     def __init__(
-        self, polynomial: sp.Poly | sp.Expr, positive_index: int, *, k: sp.Symbol
+        self,
+        polynomial: sp.Poly | sp.Expr,
+        positive_index: int,
+        *,
+        k: sp.Symbol,
+        over: KRoot | None = None,
     ) -> None:
         if isinstance(positive_index, bool) or not isinstance(positive_index, int):
             raise TypeError(f"positive_index must be an int, got {positive_index!r}")
@@ -598,6 +633,9 @@ class KRoot:
             expr = sp.sympify(expr)
         except (sp.SympifyError, TypeError):
             raise TypeError(f"polynomial must be a polynomial, got {expr!r}") from None
+        if over is not None:
+            self._init_relative(expr, positive_index, k, over)
+            return
         others = sorted(expr.free_symbols - {k}, key=str)
         if len(others) != 1:
             raise ValueError(
@@ -621,18 +659,45 @@ class KRoot:
             )
         self._init(poly, positive_index)
 
-    def _init(self, poly: sp.Poly, index: int) -> None:
+    def _init_relative(
+        self, expr: sp.Expr, index: int, k: sp.Symbol, over: KRoot
+    ) -> None:
+        if not isinstance(over, KRoot) or over._over is not None:
+            raise TypeError(f"over must be a KRoot without over, got {over!r}")
+        if over._k != k:
+            raise ValueError(f"over has the parameter {over._k}, not {k}")
+        z = over._poly.gens[0]
+        others = sorted(expr.free_symbols - {k, z}, key=str)
+        if len(others) != 1:
+            raise ValueError(
+                f"polynomial must have exactly one variable besides {z} and {k}, "
+                f"got {others or 'none'}"
+            )
+        y = others[0]
+        try:
+            poly = sp.Poly(expr, y, z, k).set_domain(sp.QQ)
+        except (sp.PolynomialError, sp.CoercionFailed):
+            raise ValueError(
+                f"polynomial must be a polynomial in {y}, {z} and {k} over Q, "
+                f"got {expr}"
+            ) from None
+        _, poly = poly.clear_denoms(convert=True)
+        _, poly = poly.primitive()
+        self._init(-poly if poly.LC() < 0 else poly, index, over)
+
+    def _init(self, poly: sp.Poly, index: int, over: KRoot | None = None) -> None:
         _set = object.__setattr__
         _set(self, "_poly", poly)
         _set(self, "_terms", tuple((m, int(c)) for m, c in poly.terms()))
         _set(self, "_index", index)
-        _set(self, "_k", poly.gens[1])
+        _set(self, "_k", poly.gens[-1])
+        _set(self, "_over", over)
 
     @classmethod
-    def _make(cls, poly: sp.Poly, index: int) -> KRoot:
-        """Wrap a normalised irreducible ``poly`` with gens ``(x, k)`` (no checks)."""
+    def _make(cls, poly: sp.Poly, index: int, over: KRoot | None = None) -> KRoot:
+        """Wrap a normalised ``poly``, gens ``(x, k)`` (``(y, z, k)`` with ``over``)."""
         new = object.__new__(cls)
-        new._init(poly, index)
+        new._init(poly, index, over)
         return new
 
     # -- public interface ----------------------------------------------------------
@@ -650,6 +715,21 @@ class KRoot:
         Poly(8*z**2*k + 7*z**2 + 2*z - 1, z, k, domain='ZZ')
         """
         return self._poly
+
+    @property
+    def over(self) -> KRoot | None:
+        """The root ``ρ_k`` a relative ``KRoot`` is taken at (``None`` if absolute).
+
+        Examples
+        --------
+        >>> from sympy import symbols
+        >>> from flanpy import KRoot
+        >>> z, k, y = symbols("z k y")
+        >>> rho = KRoot((8 * k + 7) * z**2 + 2 * z - 1, 0, k=k)
+        >>> rho.over is None, KRoot(y**2 - z, 0, k=k, over=rho).over == rho
+        (True, True)
+        """
+        return self._over
 
     @property
     def positive_index(self) -> int:
@@ -710,6 +790,8 @@ class KRoot:
             raise TypeError(f"k must be an int, got {k!r} of type {type(k).__name__}")
         if k < 1:
             raise ValueError(f"k must be >= 1, got {k}")
+        if self._over is not None:
+            return self._relative_at(k)
         x = self._poly.gens[0]
         expr = self._poly.as_expr()
         at_k = sp.Poly(expr.xreplace({self._k: sp.Integer(k)}), x, domain=sp.QQ)
@@ -721,10 +803,38 @@ class KRoot:
             )
         return roots[self._index]
 
+    def _relative_at(self, k: int) -> AlgebraicReal:
+        """Return the ``positive_index``-th distinct positive root of ``Φ(·, ρ_k)``."""
+        from flanpy._field import _NumberField  # _field imports this module
+
+        assert self._over is not None
+        rho = self._over.at(k)
+        field = _NumberField(rho)
+        y, z, kk = self._poly.gens
+        at_k = sp.Poly(self._poly.as_expr().xreplace({kk: sp.Integer(k)}), y, z)
+        coefficients = []
+        for i in range(at_k.degree(y) + 1):
+            column = sp.Poly(at_k.as_expr().coeff(y, i), z, domain=sp.QQ)
+            cs = [_fraction(c) for c in reversed(column.all_coeffs())]
+            coefficients.append(field.from_coefficients(cs))
+        if all(c.is_zero() for c in coefficients):
+            raise ValueError(
+                f"{sp.sstr(self._poly.as_expr())} vanishes identically at "
+                f"{z} = {rho}, k = {k}"
+            )
+        roots = [r.value for r in field.real_roots(coefficients) if r.value.sign() > 0]
+        if self._index >= len(roots):
+            raise ValueError(
+                f"{sp.sstr(self._poly.as_expr())} has {len(roots)} positive root(s) "
+                f"at {z} = {rho}, k = {k}; positive_index {self._index} is out of range"
+            )
+        return roots[self._index].to_real()
+
     # -- value semantics -----------------------------------------------------------
 
     def _key(self) -> tuple[Any, ...]:
-        return (self._terms, self._index)
+        over = None if self._over is None else self._over._key()
+        return (self._terms, self._index, over)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, KRoot):
@@ -735,16 +845,21 @@ class KRoot:
         return hash(self._key())
 
     def __repr__(self) -> str:
+        over = "" if self._over is None else f", over={self._over!r}"
         return (
             f"KRoot({sp.sstr(self._poly.as_expr())}, {self._index}, "
-            f"k={sp.sstr(self._k)})"
+            f"k={sp.sstr(self._k)}{over})"
         )
 
     def __str__(self) -> str:
-        return f"positive root {self._index} of {sp.sstr(self._poly.as_expr())}"
+        text = f"positive root {self._index} of {sp.sstr(self._poly.as_expr())}"
+        if self._over is not None:
+            z = self._poly.gens[1]
+            text += f" at {z} = ({self._over})"
+        return text
 
     def __reduce__(self) -> tuple[Any, ...]:
-        return (_restore_kroot, (self._poly, self._index))
+        return (_restore_kroot, (self._poly, self._index, self._over))
 
     def __setattr__(self, name: str, value: object) -> NoReturn:
         raise AttributeError("KRoot is immutable")
@@ -753,9 +868,9 @@ class KRoot:
         raise AttributeError("KRoot is immutable")
 
 
-def _restore_kroot(poly: sp.Poly, index: int) -> KRoot:
+def _restore_kroot(poly: sp.Poly, index: int, over: KRoot | None = None) -> KRoot:
     """Rebuild a pickled :class:`KRoot`."""
-    return KRoot._make(poly, index)
+    return KRoot._make(poly, index, over)
 
 
 def _primitive_in_x(poly: sp.Poly) -> sp.Poly:
