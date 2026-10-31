@@ -1,6 +1,6 @@
 # Design note: `transfer`
 
-Status: draft for approval (chunk 1). Nothing in `src/` yet.
+Status: approved 2026-10-31 (decisions in Section 12). Chunk 2 (fixed `k`) in progress.
 
 Build-order step 6. From a `LocalExpansion` (step 5): the **asymptotic expansion of
 the coefficients** `[z^n] w` (FS Thm VI.4, Thm VII.8). That means the leading term
@@ -135,9 +135,10 @@ Spike (`gamma`):
 - `e_1..e_4` agree with FS Note VI.3, **with a sign `(−1)^ℓ`** in the sum, which the
   extracted text lacks. The Hankel integral of `t^ℓ (−t)^{−a} e^{−t}` gives
   `(−1)^ℓ (a − 1)…(a − ℓ)/Γ(a)`. By hand for `e_1`: `λ_{1,1} = −1`, `λ_{1,2} = 1/2`,
-  and only `+(a − 1) + (a − 1)(a − 2)/2 = a(a − 1)/2` is eq. (13). This is our reading,
-  not an erratum; check the printed page. We use the Bernoulli recurrence and do not
-  depend on it.
+  and only `+(a − 1) + (a − 1)(a − 2)/2 = a(a − 1)/2` is eq. (13). This reading was
+  confirmed independently in review (`λ_{1,1} = −1`, `λ_{1,2} = 1/2`). It is our
+  reading, not an erratum (a low-priority CLAUDE.md open item: check the printed page).
+  We use the Bernoulli recurrence and do not depend on it.
 - Numerically, `e_0..e_8` at `n = 1000` reproduce `Γ(n + a)/Γ(n + 1)` to `1e−26..1e−32`
   for `a ∈ {1/2, −1/2, 1/4, 3/2, −5/4}`.
 
@@ -169,6 +170,11 @@ Two facts follow (spike, every example):
 analytic constant `a` comes first, and `κα = 1`), and **`N = J` in Case II**. The `e_l`
 needed are `l <= (J − 1)/κ`. This settles newton.md §5.3's "how many terms".
 
+In the API a number of terms is called **`count`** (`n` is the coefficient index), and
+`count = J` counts the `D_j` **including the zeros** (structural or not): for Catalan,
+`count = 5` is `D_0..D_4`, three of them non-zero. Step 5's `LocalExpansion.terms`
+takes `count` too (renamed from `n` in chunk 2; positional calls are unaffected).
+
 ### 2.4 The `O`-term
 
 After `J` coefficients the remainder is `O(ρ^{−n} n^{−1−e_0−J/κ})` (FS Thm VI.4, with
@@ -179,10 +185,11 @@ is printed only when the zero is structural. In other words: if `p_J` is an inte
 `K = (1 − s^{1/4})/2` has `D_1 = D_2 = D_3 = 0`) is shown as `0` but not used to sharpen
 the bound.
 
-Spike (`fixed`), relative error at `n = 1000` against `series`, after 1, 2 and 3 non-zero
-terms (`κ = 2`; the `O`-term drops by `1/n` per non-zero term, as §2.4 says):
+Spike (`fixed`), relative error at `n = 1000` against `series`, after 1, 2 and 3 **non-zero**
+terms. For `κ = 2` that is `count = 1, 3, 5` (the `O`-term drops by `1/n` per non-zero
+term); for `α = 1/4` (`κ = 4`) the second non-zero term is `D_4`, `count = 5`:
 
-| example | `ρ`, case, `α` | 1 | 2 | 3 | `D_0` (times `1/Γ(ν)`) |
+| example | `ρ`, case, `α` | 1 non-zero | 2 non-zero | 3 non-zero | `D_0` (times `1/Γ(ν)`) |
 |---|---|---|---|---|---|
 | Catalan | 1/4, I, 1/2 | 1.1e-3 | 1.1e-6 | 1.1e-9 | `1` |
 | Motzkin | 1/3, I, 1/2 | 9.4e-4 | 9.9e-7 | 9.9e-10 | `√3/2` (FS Ex. VII.18) |
@@ -233,9 +240,10 @@ recurrence `Γ(y + 1) = y Γ(y)`, so `1/Γ(−x) = r/Γ(ν)` with `r ∈ Q`:
   equality of two constants is equality of the `A`s (exact, `AlgebraicReal`).
 - **`κ = 4`**: the bases are `Γ(1/4)`, `Γ(1/2)`, `Γ(3/4)`. Reflection
   (`Γ(ν)Γ(1 − ν) = π/sin(πν)`) gives `Γ(3/4) = π√2/Γ(1/4)`. Everything is algebraic
-  times `π^{a/2} Γ(1/4)^b`. `π` and `Γ(1/4)` are algebraically independent
-  (G. V. Chudnovsky, 1976; check the exact reference before citing it), so this form
-  is canonical too.
+  times `π^{a/2} Γ(1/4)^b`. `π` and `Γ(1/4)` are algebraically independent (a known
+  result of G. V. Chudnovsky; reference to check, e.g. *Contributions to the Theory of
+  Transcendental Numbers*, AMS Math. Surveys 19, 1984), so this form is canonical too.
+  The docs do not state this, so nothing is cited.
 - **`κ = 2^m >= 8`** (allowed by PS Thm 8.5, met by no example): reflection and Legendre
   duplication (`Γ(ν)Γ(ν + 1/2) = 2^{1−2ν}√π Γ(2ν)`) relate the bases, and the
   algebraic relations among `Γ(j/8)` are not all known. The representation is then
@@ -287,7 +295,7 @@ Explicit bounds would be a later, optional feature, for example for certified ta
 
 ## 5. Numeric evaluation
 
-`Asymptotics.evalf(n, *, terms=1, dps=15)` evaluates `ρ^{−n} Σ_{j<J} D_j n^{−1−p_j}`
+`Asymptotics.evalf(n, *, count=1, dps=15)` evaluates `ρ^{−n} Σ_{j<J} D_j n^{−1−p_j}`
 with mpmath:
 
 - `D_j` from `AlgebraicReal.evalf` at `dps + 5`, and `1/Γ(ν)` by `mpmath.gamma`.
@@ -300,7 +308,7 @@ The step-5 slow test (`test_coefficients_at_1000`, `test_broda_coefficients_at_1
 `transfer(e, n, count)` helper) moves to `tests/test_transfer.py` and uses `evalf`
 instead of the helper. The bounds are re-measured (3 times the §2.4 table; `F_k`, `L_k`
 for `k ∈ {2, 10, 50, 54, 108}`). The hypothesis test in `test_newton.py`
-(`test_random_systems`, the 5% check at `n = 300`) uses `evalf(n, terms=1)`. The helper
+(`test_random_systems`, the 5% check at `n = 300`) uses `evalf(n, count=1)`. The helper
 is deleted.
 
 ## 6. Ratios of two expansions
@@ -383,7 +391,7 @@ The monomial needs no new polynomial and no new cut.
   for `n ∈ {1, 2, 3, 10, 50, 54, 55, 108}`).
 - Further terms `D_1, D_2, …` for symbolic `k` would need step 5's Hensel lifting over
   `Q(k)(ρ_k, b_k)`, which step 5 does not provide (`terms` needs a fixed `k`). **Out of
-  scope.** `terms(J)` on a symbolic piece raises `ValueError` ("use `specialize(n)`"),
+  scope.** `terms(count)` on a symbolic piece raises `ValueError` ("use `specialize(n)`"),
   as `LocalExpansion.terms` does.
 
 ### 7.2 Families, pieces and refusals
@@ -424,14 +432,15 @@ eq. (38) needs only `ρ_k`'s expansion (eq. (35)). **Q8**: leave this to step 7
 ```python
 class GammaConstant[X: (AlgebraicReal, KRoot)]:
     # value: rational * prod X_i^m_i * prod Gamma(nu)^m_nu (Section 3.2)
+    # symbolic k (chunk 3): the monomial in KRoots
     rational: Fraction
-    # fixed k: at most one AlgebraicReal, exponent 1; symbolic k: KRoots
-    algebraic: tuple[tuple[X, int], ...]
+    factors: tuple[tuple[X, int], ...]
     # 0 < nu < 1, as printed in FS and Broda; a canonical key for == and hash
     gamma: tuple[tuple[Fraction, int], ...]
 
-    # fixed k: rational * prod X^m exactly (the Gamma part excluded)
-    def value(self) -> AlgebraicReal: ...
+    # fixed k: rational * prod X^m exactly, the Gamma part excluded
+    def algebraic(self) -> AlgebraicReal: ...
+    # the full value, Gamma part included
     def evalf(self, dps: int = 15) -> mpmath.mpf: ...
     # radicals for degree <= 2 (Q4), sympy.gamma
     def as_expr(self) -> sp.Expr: ...
@@ -446,12 +455,14 @@ class Asymptotics[X: (AlgebraicReal, KRoot)]:
     exponent: Fraction  # beta: [z^n] w ~ C rho^-n n^beta; -alpha-1 (I), alpha-1 (II)
     leading: GammaConstant[X]  # C
 
-    # fixed k: (power of n, D_j) for j < n, zeros included; exact, cached
-    def terms(self, n: int) -> list[tuple[Fraction, GammaConstant[AlgebraicReal]]]: ...
-    # the O-term after n terms (Section 2.4)
-    def error_exponent(self, n: int) -> Fraction: ...
-    def evalf(self, n: int, *, terms: int = 1, dps: int = 15) -> mpmath.mpf: ...
-    def as_expr(self, n: sp.Symbol, *, terms: int = 1) -> sp.Expr: ...
+    # fixed k: (power of n, D_j) for j < count, zeros included; exact, cached
+    def terms(
+        self, count: int
+    ) -> list[tuple[Fraction, GammaConstant[AlgebraicReal]]]: ...
+    # the O-term after count terms (Section 2.4)
+    def error_exponent(self, count: int) -> Fraction: ...
+    def evalf(self, n: int, *, count: int = 1, dps: int = 15) -> mpmath.mpf: ...
+    def as_expr(self, n: sp.Symbol, *, count: int = 1) -> sp.Expr: ...
     def specialize(self, k: int) -> Asymptotics[AlgebraicReal]: ...
 
     # rho, k, kset: forwarded
@@ -463,8 +474,10 @@ class Ratio[X: (AlgebraicReal, KRoot)]:
     exponent: Fraction  # [z^n] A / [z^n] B ~ limit · n^exponent
     limit: GammaConstant[X]  # q_0
 
-    def terms(self, n: int) -> list[tuple[Fraction, GammaConstant[AlgebraicReal]]]: ...
-    def evalf(self, n: int, *, terms: int = 1, dps: int = 15) -> mpmath.mpf: ...
+    def terms(
+        self, count: int
+    ) -> list[tuple[Fraction, GammaConstant[AlgebraicReal]]]: ...
+    def evalf(self, n: int, *, count: int = 1, dps: int = 15) -> mpmath.mpf: ...
     def specialize(self, k: int) -> Ratio[AlgebraicReal]: ...
 
 
@@ -513,7 +526,8 @@ composite field (`√2` with `√3`, cubic with quadratic).
 
 **Quadratic first (HG style), exact:**
 - Catalan: `D = 1, 0, −9/8, 0, 145/128, 0, −1155/1024` times `1/√π` (the known expansion
-  of `C_n`); `as_expr` gives `4**n/(sqrt(pi)*n**(3/2))`; `error_exponent(1) = −5/2`.
+  of `C_n`), i.e. `terms(7)`; `as_expr` gives `4**n/(sqrt(pi)*n**(3/2))`;
+  `error_exponent(1) = −5/2` (`p_1 = 1` is a structural zero).
 - Motzkin: FS Example VII.18's printed terms, exactly.
 - HG `A_k`, Broda `R_k`, `k = 1..20`: leading constant = HG eq. (16) /
   Broda eq. (6) (HG Prop. 4), to 40 digits.
@@ -525,7 +539,7 @@ tree (deg 10): `D_0` against `local_expansion` (`α b/Γ(1 − α)`).
 
 **Acceptance (Broda):**
 - `F_k`, `L_k`, `k ∈ {2, 10, 50, 54, 108}`, `n = 1000` (`slow`): `evalf` with 1, 2, 3
-  non-zero terms against `series`, bounds 3 times the §2.4 errors (`F_2`
+  non-zero terms (`count = 1, 3, 5`) against `series`, bounds 3 times the §2.4 errors (`F_2`
   `8.0e-4, 8.3e-7, 8.5e-10`; `L_2` `2.1e-4, 3.6e-8, 2.7e-11`; others measured in chunk 2).
 - Thm 3.2 / eq. (38) / Table 1: `ratio(asymptotics(L_k), asymptotics(F_k))` has
   `exponent = 1` and `limit` = the minimal polynomials of §6.2 (exact), `0.4173, 0.4433,
@@ -547,7 +561,7 @@ with a bad piece → `ValueError` naming its `KSet`; `ratio` with different `ρ`
 vs Motzkin) → `ValueError`; `terms` on a symbolic piece → `ValueError`.
 
 **Properties (`hypothesis`)**, from step 5's random small systems (aperiodic,
-`unique`): `evalf(300, terms=1)` within 5% (moved from `test_newton.py`); `terms` agree
+`unique`): `evalf(300, count=1)` within 5% (moved from `test_newton.py`); `terms` agree
 with step 5's `α`, `b`, `c` (`D_0` formula); `D_j = 0` for integer `p_j >= 0`.
 
 **API:** value semantics, `specialize`, `terms` caching, `GammaConstant` arithmetic and
@@ -569,8 +583,9 @@ key, `KCases` mapping (`uncovered` propagated), the docstring examples (EX01).
 - **`examples/broda2020.py`**, "Step 6": `R_k` (eq. (6)), eq. (8) (`S_k/R_k → ρ_k`),
   Thm 3.2 for `L_k` and `F_k`, eq. (38) and Table 1 (exact limits vs simulated vs
   approximation, the sign convention of newton.md §5.5); Status: step 6 done.
-- **`docs/refs.bib`**: DLMF (chapter 5; online, no DOI, cite by URL and equation) and,
-  only if the docs cite it, Chudnovsky 1976 (DOI checked against Crossref).
+- **`docs/refs.bib`**: DLMF (chapter 5; online, no DOI, cite by URL and equation).
+  Chudnovsky only if the docs state the `κ = 4` canonicity, and then from a source we
+  can verify (e.g. the 1984 AMS Math. Surveys 19 book), not from memory.
 - **CLAUDE.md**: a "Step 6" block under Decisions; layout (`_transfer.py`); open items
   (FS Note VI.3 sign reading, low priority).
 
@@ -602,20 +617,16 @@ one**):
 | 3 | `ratio` (composite field, `Ratio`), symbolic `k` (`asymptotics_in_k`, monomials, `at`, `combine`); Broda acceptance (Thm 3.2, Table 1, eq. (8)); `broda2020.py` step 6; guide part 2; CLAUDE.md | same branch |
 | — | release 0.1.0 (§10) | separate PR, after this one is merged |
 
-## 12. Questions for approval
+## 12. Decisions (approved 2026-10-31)
 
-- **Q1 Names**: `asymptotics`, `asymptotics_in_k`, `Asymptotics`, `ratio`, `Ratio`,
-  `GammaConstant` (recommended)? Or `transfer`-based names?
-- **Q2 Errors**: `ValueError` for the `unique` refusals, no new class (recommended)?
-- **Q3 `Γ` form**: store `Γ(ν)`, `ν ∈ (0, 1)`, as FS and Broda print it
-  (`1/(8Γ(3/4))`), with a canonical key (reflection) for equality (recommended)? Or
-  normalise by reflection everywhere?
-- **Q4 Display**: radicals for algebraic parts of degree <= 2 in `as_expr`, `CRootOf`
-  otherwise (recommended)?
-- **Q5 Error terms**: asymptotic `O(·)` only, explicit bounds later (recommended)?
-- **Q6 Ratios with different `ρ`**: refuse (recommended), or carry `(ρ_B/ρ_A)^n`?
-- **Q7 Symbolic `k`, a piece with `unique != True`**: refuse the call and name the piece
-  (recommended), or move it to `uncovered`?
-- **Q8 Limit as `A(ρ_k, k)`** (§7.3): leave to step 7 (recommended), or add to step 6?
-- **Q9 End-to-end shortcut**: none in step 6, reconsider at 0.1.0 (recommended)?
-- **Q10 Chunks** as in Section 11, release 0.1.0 as a separate PR afterwards?
+- **Q1**: yes: `asymptotics`, `asymptotics_in_k`, `Asymptotics`, `ratio`, `Ratio`, `GammaConstant`; module `_transfer.py`.
+- **Q2**: `ValueError`, no new exception class.
+- **Q3**: store `Γ(ν)`, `0 < ν < 1`, as FS and Broda print it; the reflection key only for `==` and `hash`.
+- **Q4**: radicals for algebraic parts of degree <= 2 in `as_expr`, `CRootOf` otherwise.
+- **Q5**: `O`-terms only; explicit bounds are a later feature (Section 4 stays as the plan).
+- **Q6**: refuse different `ρ`.
+- **Q7**: refuse, naming the bad pieces' `KSet`s.
+- **Q8**: step 7 (Section 7.3 stays as its plan).
+- **Q9**: no shortcut now; revisit when writing the 0.1.0 README.
+- **Q10**: chunks as in Section 11; 0.1.0 as a separate PR after this one.
+- **Review changes**: a number of terms is `count`, never `n`, and counts the `D_j` including zeros (Sections 2.3, 2.4, 8, 9; `LocalExpansion.terms` renamed in chunk 2); `GammaConstant.value()` is `algebraic()` (the `Γ` part excluded; `evalf` is the full value), and the field of algebraic factors is `factors`; the FS Note VI.3 sign reading confirmed in review (a low-priority open item); Chudnovsky cited only from a verified source and only if the docs state the `κ = 4` canonicity.
