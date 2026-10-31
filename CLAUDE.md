@@ -85,7 +85,7 @@ Reference papers (in Guilherme's Zotero library):
 
 ### Step 5: `newton` (design note: `dev/design/newton.md`)
 
-- **Public API**: `flanpy.local_expansion(singularity, *, k=None) -> LocalExpansion[AlgebraicReal]`; `flanpy.local_expansion_in_k(Singularity[KRoot] | KCases[Singularity]) -> KCases[LocalExpansion]` (pieces cover each input piece's `kset`, `uncovered` propagated); `flanpy.LocalExpansion` (`singularity`, `alpha`, `ramification` κ, `b` (Case I) / `c` (Case II), `terms(n)` (fixed `k` only: `n` consecutive exponents in `s = 1 - z/ρ`, step `1/κ`, from 0 (I) or `-α` (II), exact, cached), `specialize`, `k`, `kset`). Broda's conventions: `w = (analytic) - b s^α + ...` (eq. (20)), `1/w = c s^α + ...` (eq. (31)); in Case I `α` is the first non-integer exponent with a non-zero coefficient.
+- **Public API**: `flanpy.local_expansion(singularity, *, k=None) -> LocalExpansion[AlgebraicReal]`; `flanpy.local_expansion_in_k(Singularity[KRoot] | KCases[Singularity]) -> KCases[LocalExpansion]` (pieces cover each input piece's `kset`, `uncovered` propagated); `flanpy.LocalExpansion` (`singularity`, `alpha`, `ramification` κ, `b` (Case I) / `c` (Case II), `terms(count)` (fixed `k` only: `count` consecutive exponents in `s = 1 - z/ρ`, step `1/κ`, from 0 (I) or `-α` (II), exact, cached), `specialize`, `k`, `kset`). Broda's conventions: `w = (analytic) - b s^α + ...` (eq. (20)), `1/w = c s^α + ...` (eq. (31)); in Case I `α` is the first non-integer exponent with a non-zero coefficient.
 - **Coefficient field**: `_field.py`, real number fields `Q(θ)` (`θ` an `AlgebraicReal`): arithmetic modulo `m_θ` (flint `fmpq_poly` or SymPy `QQ[x]`, by the `_rings` backend selection), exact zero test and sign, enclosures, `to_real` (squarefree part of the characteristic polynomial), real roots over `Q(θ)` by Trager norms (Trager 1976; Loos 1983), tower flattened. Only real fields are needed: every Puiseux coefficient of `w` is real (Lemma R). SymPy radicals are not used (heuristic zero test; `ρ` itself is often non-radical: the S5 tree `T = z(1 + T^2 + T^5)`). Pitfall: to decide `x = target` refine only `x`'s enclosure.
 - **Local problem**: Case I `G(ρ(1 - s), a + Y)`, Case II the reciprocal polynomial (eq. (29)); `a ∈ Q(ρ)` from `gcd(G(ρ, ·), G_w(ρ, ·))` (in every example). Zero tests of the hull entries by a cascade (zero polynomial; remainder mod `m_ρ`; Broda's gcd test; the field). Polygon on the columns `j <= r` only (`r` = multiplicity of the point).
 - **Which branch is `w`**: the real branches (real roots of each edge's characteristic polynomial); the **rank test** is always on (step 4's window data: rank of `w(x0)` among the real roots of `G(x0, ·)` in its window = rank of `w` among the branches sorted as `s → 0⁺`); the sign rule (`b > 0`, `c > 0`, by monotonicity) and the window count are assertions.
@@ -157,7 +157,7 @@ examples/        running examples, jupytext percent scripts (`python examples/<n
 
 1 `system` + `series` → 2 `kset` → 3 `elimination` → 4 `singularity` (+ exact algebraic reals) → 5 `newton` → 6 `transfer` → 7 `families` → 8 `symbolic` → 9 `automata` (optional).
 
-- Release 0.1.0 after step 6 (first end-to-end run: equations → asymptotics for fixed `k`). Set up PyPI trusted publishing before that release.
+- Release 0.1.0 after step 6 (first end-to-end run: equations → asymptotics for fixed `k`). Published by trusted publishing (`release.yml`, see Releasing).
 - Each module: first a quadratic / square-root example (Hitchhiker's Guide style), then the Broda 2020 case as the real acceptance test.
 
 ## Acceptance tests from the papers
@@ -193,7 +193,7 @@ All configuration lives in `pyproject.toml` (build backend `hatchling`, `src/` l
 - **Lint/format**: `ruff` with pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, RUF and pydocstyle (NumPy convention). `dev/spikes/` is excluded (throwaway code).
 - **Tests**: `pytest` with `--strict-markers --strict-config --doctest-modules`; collects `tests/` and the docstrings in `src/flanpy`; warnings are errors. Tests marked `slow` (N = 1000) are deselected by default (`-m "not slow"` in `addopts`); run them with `pytest -m slow`. Test helpers (e.g. `tests/_enumerate.py`, the brute-force enumerator for Broda 2020) are importable because `tests` is on pytest's `pythonpath`. Property-based tests use `hypothesis` with a derandomized profile (`tests/conftest.py`). Doctests of a private module import its names from that module, not from `flanpy`: when pytest (importlib mode) collects a module alone, it executes it a second time, and the re-exported classes then differ. Public classes set `__module__ = "flanpy"`. pytest then collects their class docstrings and properties through `src/flanpy/__init__.py`. It misses their methods: doctest matches a function to the module whose dict is its `__globals__` (the private module), where the class is skipped. So each private module sets `__test__ = method_doctests(<classes>)` (`_doctests.py`). That lists only the functions, classmethods and staticmethods, so no docstring runs twice. To check, compare `pytest --collect-only -q src` before and after a change: no item may be lost.
 - **SPDX**: every `.py` file starts with `# SPDX-License-Identifier: GPL-3.0-or-later`.
-- **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 with the `fast` extra (flint backend) and on `3.x` without it (pure-Python backend; each job checks which backend it got), a `Slow tests` job (`pytest -m slow`, both entries) on every push and PR, plus a docs job (`sphinx-build -W` for HTML, executing the MyST-NB examples, then the `doctest` builder). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
+- **CI**: `.github/workflows/ci.yml` runs ruff, mypy, pytest and `python -m build` on Python 3.13 with the `fast` extra (flint backend) and on `3.x` without it (pure-Python backend; each job checks which backend it got), a `Slow tests` job (`pytest -m slow`, both entries) on every push and PR, plus a docs job (`sphinx-build -W` for HTML, executing the MyST-NB examples, then the `doctest` builder). `.github/workflows/release.yml` publishes tags `v*` to PyPI (see Releasing). Read the Docs config: `.readthedocs.yaml` (`fail_on_warning: true`).
 - **Repo files**: `README.md`, `CITATION.cff`, `CONTRIBUTING.md`, `docs/refs.bib` (DOIs checked against Crossref; arXiv-only entries against the arXiv API).
 
 Commands (from the repo root, in a Python 3.13 venv):
@@ -212,13 +212,13 @@ python -m twine check dist/*         # release metadata check
 
 ## Releasing
 
-Manual for now (until trusted publishing is set up). From a clean `main` that CI has passed:
+By trusted publishing (OIDC): `.github/workflows/release.yml` runs on tags `v*`, checks that the tag equals `v<version>` from `pyproject.toml` (fails otherwise), builds, runs `twine check --strict`, and a separate `publish` job (GitHub environment `pypi`, `id-token: write`, `pypa/gh-action-pypi-publish` pinned by commit SHA) uploads. No token exists anywhere; never use `twine upload`. Only Guilherme tags.
 
-1. Build: `rm -rf dist && .venv/bin/python -m build`.
-2. Check: `.venv/bin/python -m twine check dist/*`.
-3. Upload: `.venv/bin/python -m twine upload dist/*`. Credentials come from the `[pypi]` section of the maintainer's `~/.pypirc` (username `__token__`, project-scoped token); never read or print that file. Use `python -m twine`, not the `twine` script, which can carry a stale interpreter path.
-4. Tag the uploaded commit: `git tag -a v<version> <commit> -m "flanpy <version>"` and `git push origin v<version>`.
-5. Bump the version in `pyproject.toml` and `CITATION.cff` to the next `.devN` in a separate commit.
+1. On a branch: set the version (no `.dev`) in `pyproject.toml` and `CITATION.cff` (`date-released`), move `CHANGELOG.md`'s "Unreleased" into the new version; PR, CI green, merge.
+2. Check locally from that `main`: `rm -rf dist && .venv/bin/python -m build && .venv/bin/python -m twine check --strict dist/*`; install the wheel in a fresh venv and run the README example.
+3. Tag the merged commit and push the tag: `git tag -a v<version> -m "flanpy <version>" <commit>` then `git push origin v<version>`. The workflow publishes (approval in the `pypi` environment, if required).
+4. Check: the PyPI page, `pip install flanpy==<version>` in a fresh venv, Read the Docs `stable`.
+5. Bump the version in `pyproject.toml` and `CITATION.cff` to the next `.dev0` (e.g. `0.2.0.dev0`) in a separate commit.
 
 ### Documentation (decided)
 
@@ -243,7 +243,7 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - [x] Build-order step 3 (`elimination`): done 2026-10-30 (PR #5).
 - [x] Build-order step 4 (`singularity`): done 2026-10-30 (PR #6).
 - [x] Build-order step 5 (`newton`): done 2026-10-31 (PR #7).
-- [x] Build-order step 6 (`transfer`): done (PR #8).
+- [x] Build-order step 6 (`transfer`): done 2026-10-31 (PR #8).
 - Step 7: `2/(b_k c_k) ∈ Q(ρ_k)` at every sampled `k` (it is `-ρ'(1)/ρ(1)` for the letter-marking parameter), so eq. (38) may need only `ρ_k`'s expansion (eq. (35)): reduce the limit to `A(ρ_k, k)`, `A ∈ Q(k)[z]`, by `A^2 ≡ 4 D_b D_c/(N_b N_c) (mod f)` (transfer.md §7.3).
 - Broda 2020 §3.4 prints `res_w(G, ∂G/∂w)` as a rational function; it differs from the computed resultant `k^3 z^3 p_k^2 q_k^2`; the conclusion stands; to confirm with the authors (not an erratum).
 - Broda 2020 §3.4, uniqueness for `k > 54`: as extracted, the argument writes `µ_k = 1/(k(2k + 27)ρ_k^2) > 0`; the product of the roots gives `−1/(k(2k + 27)ρ_k^2) < 0`, so there is no contradiction, and `−ρ_k` is a root exactly at `k = 108`. The conclusion stands (design note §5.5). To check against the printed text, then raise with the authors.
@@ -251,5 +251,5 @@ Manual for now (until trusted publishing is set up). From a clean `main` that CI
 - Confirm the Broda 2020 eq. (5) erratum with the authors (see Decisions, step 1).
 - FS Note VI.3 (p. 383), as extracted, lacks a sign: `e_k = Σ_ℓ λ_{k,ℓ} (−1)^ℓ (α − 1)…(α − ℓ)` matches eq. (13) (`λ_{1,1} = −1`, `λ_{1,2} = 1/2`; confirmed in review). Our reading, not an erratum; check the printed page (low priority; the code uses the Bernoulli recurrence).
 - Broda 2020 eqs. (37)-(38) use -b_k relative to eq. (20)'s b (b_k > 0 by monotonicity); the limit 1/2 stands; check the printed eqs. (20), (37), (38), then raise with the authors.
-- PyPI trusted publishing (GitHub Actions OIDC release workflow): not set up yet; do it before the first real release.
+- PyPI trusted publishing: `release.yml` added (PR #9); pending on Guilherme: the trusted publisher on pypi.org, the GitHub environment `pypi`, then revoking the `~/.pypirc` token.
 - Remaining technical risk: Case I curves with larger systems, where the Groebner step may be slow. Non-radical roots are handled by the number fields of step 5. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.

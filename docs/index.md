@@ -6,9 +6,9 @@ related objects. It goes from a combinatorial specification to the asymptotics
 of the coefficients of an algebraic generating function, possibly for a family
 indexed by the alphabet size $k$.
 
-```{warning}
-flanpy is pre-alpha. Only the input type {class}`flanpy.System`, its
-power-series coefficients ({func}`flanpy.series`, {func}`flanpy.series_in_k`),
+```{note}
+flanpy is alpha (0.1.0): the public API may still change. Implemented are the
+input type {class}`flanpy.System`, its power-series coefficients ({func}`flanpy.series`, {func}`flanpy.series_in_k`),
 sets of alphabet sizes ({class}`flanpy.KSet`, {class}`flanpy.KCases`),
 elimination to one curve ({func}`flanpy.eliminate`, {func}`flanpy.eliminate_in_k`,
 {class}`flanpy.Curve`), exact real algebraic numbers ({class}`flanpy.AlgebraicReal`,
@@ -16,7 +16,8 @@ elimination to one curve ({func}`flanpy.eliminate`, {func}`flanpy.eliminate_in_k
 {func}`flanpy.singularity_in_k`), the local expansion at the singularity
 ({func}`flanpy.local_expansion`, {func}`flanpy.local_expansion_in_k`) and the
 asymptotics of the coefficients ({func}`flanpy.asymptotics`,
-{func}`flanpy.asymptotics_in_k`, {func}`flanpy.ratio`) are implemented so far, and the public API is not stable.
+{func}`flanpy.asymptotics_in_k`, {func}`flanpy.ratio`). Expansions in $1/k$,
+grammars and the automata front end are planned.
 ```
 
 ## Pipeline
@@ -62,6 +63,14 @@ reproduces that step's results.
 
 examples/catalan
 examples/broda2020
+```
+
+## Changes
+
+```{toctree}
+:maxdepth: 1
+
+changelog
 ```
 
 ## Installation

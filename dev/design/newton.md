@@ -485,8 +485,8 @@ This belongs to the step 6–7 examples, not to step 5.
   restarts the polygon. The rank test is always on; the sign rule and `n_W` are
   assertions (`RuntimeError`).
 - **Terms**: Hensel lifting by undetermined coefficients, incremental (powers of `V`
-  kept), in the field of the branch; Case II inverts `V` as a series. `terms(n)` gives
-  `n` consecutive exponents, zeros included, from `0` (I) or `-α` (II).
+  kept), in the field of the branch; Case II inverts `V` as a series. `terms(count)` gives
+  `count` consecutive exponents, zeros included, from `0` (I) or `-α` (II).
 - **PS Thm 8.5 for our scope.** The proof of Thm 8.5 uses sums, products, linear
   components and Prop. 8.2, whose proof (Appendix D) needs non-negative Taylor
   coefficients, irreducibility and polynomial dependence on the inputs, never integer
@@ -802,7 +802,7 @@ within 5% (aperiodic, `unique`).
 
 ## 11. Decisions (approved 2026-10-30)
 
-- **Q1**: yes: `local_expansion`, `local_expansion_in_k`, `LocalExpansion` (`alpha`, `ramification`, `b`, `c`, `terms(n)`, `specialize`).
+- **Q1**: yes: `local_expansion`, `local_expansion_in_k`, `LocalExpansion` (`alpha`, `ramification`, `b`, `c`, `terms(count)` (renamed from `terms(n)` in step 6), `specialize`).
 - **Q2**: (a) `KRoot(..., over=rho_k)`; chunk 4 pins down the generators `(y, z, k)`, `positive_index` over the distinct positive roots of `Φ(·, ρ_k, k)` (`Φ` need not be irreducible), equality and hash, exact `at(n)` equal to the fixed-`k` `AlgebraicReal`, and `repr`.
 - **Q3**: yes: `_NumberField` only, behind the `_Field` protocol; radicals are a step 7 display question.
 - **Q4**: yes: `NotImplementedError` naming the piece (its `KSet`) and saying that fixed `k` works.

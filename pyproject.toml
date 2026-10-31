@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flanpy"
-version = "0.0.1.dev1"
+version = "0.1.0"
 description = "Analytic combinatorics toolchain for algebraic generating functions in descriptional complexity."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -19,7 +19,7 @@ keywords = [
     "formal languages",
 ]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -55,8 +55,9 @@ docs = [
 
 [project.urls]
 Documentation = "https://flanpy.readthedocs.io/"
-Repository = "https://github.com/gmcmduarte/flanpy"
+Source = "https://github.com/gmcmduarte/flanpy"
 Issues = "https://github.com/gmcmduarte/flanpy/issues"
+Changelog = "https://github.com/gmcmduarte/flanpy/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/flanpy"]
@@ -68,6 +69,7 @@ include = [
     "/docs",
     "/LICENSE",
     "/README.md",
+    "/CHANGELOG.md",
     "/CITATION.cff",
     "/CONTRIBUTING.md",
 ]
