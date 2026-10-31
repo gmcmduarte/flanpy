@@ -15,8 +15,8 @@ coefficients (:func:`series`, :func:`series_in_k`), sets of alphabet sizes
 (:func:`singularity`) and for symbolic ``k`` (:func:`singularity_in_k`,
 :class:`KRoot`), and the local expansion at the singularity, at a fixed ``k``
 (:func:`local_expansion`) and for symbolic ``k`` (:func:`local_expansion_in_k`), and
-the asymptotics of the coefficients at a fixed ``k`` (:func:`asymptotics`,
-:class:`Asymptotics`, :class:`GammaConstant`).
+the asymptotics of the coefficients, at a fixed ``k`` (:func:`asymptotics`) and for
+symbolic ``k`` (:func:`asymptotics_in_k`), with their ratios (:func:`ratio`).
 
 Examples
 --------
@@ -48,7 +48,14 @@ from flanpy._system import (
     WellPosednessError,
     ZeroCoordinateWarning,
 )
-from flanpy._transfer import Asymptotics, GammaConstant, asymptotics
+from flanpy._transfer import (
+    Asymptotics,
+    GammaConstant,
+    Ratio,
+    asymptotics,
+    asymptotics_in_k,
+    ratio,
+)
 
 __version__: str = _version("flanpy")
 
@@ -62,6 +69,7 @@ __all__ = [
     "KRoot",
     "KSet",
     "LocalExpansion",
+    "Ratio",
     "Singularity",
     "SingularityWarning",
     "System",
@@ -71,10 +79,12 @@ __all__ = [
     "ZeroCoordinateWarning",
     "__version__",
     "asymptotics",
+    "asymptotics_in_k",
     "eliminate",
     "eliminate_in_k",
     "local_expansion",
     "local_expansion_in_k",
+    "ratio",
     "series",
     "series_in_k",
     "singularity",

@@ -19,19 +19,22 @@ from flanpy import (
     Asymptotics,
     GammaConstant,
     LocalExpansion,
+    Ratio,
     SingularityWarning,
     System,
     asymptotics,
+    asymptotics_in_k,
     eliminate,
     eliminate_in_k,
     local_expansion,
     local_expansion_in_k,
+    ratio,
     series,
     singularity,
     singularity_in_k,
 )
 from flanpy._algebraic import _reciprocal
-from flanpy._transfer import _e_poly, _e_value, _inverse_gamma
+from flanpy._transfer import _e_poly, _e_value, _inverse_gamma, _sin_pi
 from test_newton import (
     CATALAN,
     CONSTRUCTED,
@@ -51,6 +54,7 @@ from test_newton import (
     L,
     R,
     T,
+    U,
     W,
     Yu,
     expand,
@@ -490,3 +494,161 @@ def test_evalf_precision() -> None:
         )
         assert abs(value / expected - 1) < mpmath.mpf(10) ** -48
         assert abs(a.evalf(1000) / expected - 1) < mpmath.mpf(10) ** -14
+
+
+# -- exact constants: sin(πν), products, the reflection key ----------------------------
+
+
+NUS = [HALF, Fraction(3, 4), Fraction(1, 4), Fraction(5, 8), Fraction(7, 8)]
+NUS += [Fraction(1, 3), Fraction(5, 6), Fraction(2, 3), Fraction(1, 8), Fraction(3, 16)]
+
+
+@pytest.mark.parametrize("nu", NUS)
+def test_sin_pi(nu: Fraction) -> None:
+    value = _sin_pi(nu)
+    with mpmath.workdps(50):
+        assert abs(value.evalf(45) - mpmath.sinpi(mp(nu))) < mpmath.mpf(10) ** -44
+
+
+def test_reflection_key() -> None:
+    """``Γ(1/4) Γ(3/4) = √2 π`` and ``1/Γ(3/4) = sin(3π/4) Γ(1/4)/π``."""
+    sqrt2 = AlgebraicReal(y**2 - 2, 1)
+    one = AlgebraicReal(y - 1, 0)
+    left = GammaConstant._fixed(one, ((Fraction(1, 4), 1), (Fraction(3, 4), 1)))
+    right = GammaConstant._fixed(sqrt2, ((HALF, 2),))
+    assert left == right and hash(left) == hash(right)
+    assert left != GammaConstant._fixed(one, ((HALF, 2),))
+    with mpmath.workdps(30):
+        assert abs(left.evalf(25) / right.evalf(25) - 1) < mpmath.mpf(10) ** -24
+    half = AlgebraicReal(2 * y**2 - 1, 1)  # sin(3π/4) = √2/2
+    a = GammaConstant._fixed(one, ((Fraction(3, 4), -1),))
+    b = GammaConstant._fixed(half, ((Fraction(1, 4), 1), (HALF, -2)))
+    assert a == b and hash(a) == hash(b)
+
+
+def test_products() -> None:
+    c = asym(CATALAN, F).leading  # 1/√π
+    assert str(c * c * 4) == "4/pi" and (4 * c) / c == GammaConstant._fixed(
+        AlgebraicReal(y - 4, 0)
+    )
+    m = asym(MOTZKIN, F).leading  # (√3/2)/√π
+    assert (m / c).as_expr() == sp.sqrt(3) / 2 and (m / c).gamma == ()
+    assert (m * m).algebraic() == AlgebraicReal(4 * y - 3, 0)
+    zero = asym(CATALAN, F).terms(2)[1][1]
+    assert (c * zero)._is_zero() and str(c * zero) == "0"
+    with pytest.raises(ZeroDivisionError):
+        c / zero
+    with pytest.raises(TypeError):
+        c * "x"
+    with pytest.raises(TypeError):
+        c / "x"
+    with pytest.raises(ValueError, match="nothing to specialize"):
+        c.at(2)
+
+
+# -- ratios at a fixed k ---------------------------------------------------------------
+
+
+def test_ratio_with_itself() -> None:
+    for a in (asym(CATALAN, F), asym(SSNF, L, 2)):
+        r = ratio(a, a)
+        assert r.exponent == 0 and r.limit == GammaConstant._fixed(
+            AlgebraicReal(y - 1, 0)
+        )
+        terms = r.terms(5)
+        assert terms[0][1].gamma == () and all(q._is_zero() for _, q in terms[1:])
+        assert r.evalf(1000, count=5) == 1
+
+
+def test_ratio_mixed_gamma_classes() -> None:
+    """``K = (1 - s^{1/4})/2`` over Catalan: ``n^{1/4} √π/(8 Γ(3/4))``."""
+    system = System({F: 1 + z * F**2, U: z + U**2, K: U / 2 + K**2}, z=z)
+    r = ratio(asym(system, K), asym(system, F))
+    assert r.exponent == Fraction(1, 4)
+    assert r.limit.as_expr() == sp.sqrt(sp.pi) / (8 * sp.gamma(sp.Rational(3, 4)))
+    assert r.limit.gamma == ((HALF, 1), (Fraction(3, 4), -1))
+    assert r.limit == r.terms(1)[0][1]
+    # the same constant through the reflection key: √2 Γ(1/4)/(16 √π)
+    other = GammaConstant._fixed(
+        AlgebraicReal(128 * y**2 - 1, 1), ((Fraction(1, 4), 1), (HALF, -1))
+    )
+    assert r.limit == other and hash(r.limit) == hash(other)
+    assert [p for p, _ in r.terms(5)] == [
+        Fraction(1, 4) - Fraction(j, 4) for j in range(5)
+    ]
+    n = 300
+    c = series(system, n)
+    with mpmath.workdps(30):
+        exact = mp(Fraction(c[K][n])) / mp(Fraction(c[F][n]))
+        assert abs(r.evalf(n, count=5, dps=25) / exact - 1) < 1e-4
+
+
+def test_ratio_pole_over_catalan() -> None:
+    """``T/(1 - 4z)`` over Catalan ``T``: ``2√π n^{3/2} - 2n + ...``."""
+    system = System({T: 1 + z * T**2, Yu: 1 + 4 * z * Yu, W: T * Yu}, z=z)
+    w, t = asym(system, W), asym(system, T)
+    assert w.expansion.singularity.case == "II" and w.expansion.alpha == 1
+    assert w.expansion.ramification == 2
+    r = ratio(w, t)
+    assert r.exponent == Fraction(3, 2) and r.limit.as_expr() == 2 * sp.sqrt(sp.pi)
+    q1 = r.terms(2)[1]
+    assert q1[0] == 1 and rational(q1[1]) == -2 and q1[1].gamma == ()
+    n = 1000
+    c = series(system, n)
+    with mpmath.workdps(30):
+        exact = mp(Fraction(c[W][n])) / mp(Fraction(c[T][n]))
+        assert abs(r.evalf(n, count=4, dps=25) / exact - 1) < 3 * 1.4e-7
+    # The other way round, the denominator W has terms in two Γ classes.
+    back = ratio(t, w)
+    assert back.limit.as_expr() == 1 / (2 * sp.sqrt(sp.pi))
+    assert len(back.terms(1)) == 1
+    with pytest.raises(NotImplementedError, match="two Γ classes"):
+        back.terms(2)
+    with mpmath.workdps(30):
+        assert abs(back.evalf(n, count=4, dps=25) * exact - 1) < 1e-5
+
+
+def test_ratio_refusals() -> None:
+    catalan, motzkin = asym(CATALAN, F), asym(MOTZKIN, F)
+    with pytest.raises(ValueError, match=r"ρ differs \(1/4 and 1/3\)"):
+        ratio(catalan, motzkin)
+    with pytest.raises(ValueError, match="different k"):
+        ratio(asym(RK, R, 2), asym(RK, R, 3))
+    piece = asymptotics_in_k(
+        local_expansion_in_k(singularity_in_k(eliminate_in_k(RK, R)))
+    )
+    symbolic = piece.pieces[0][1]
+    with pytest.raises(ValueError, match="fixed k and the other"):
+        ratio(asym(RK, R, 2), symbolic)
+    with pytest.raises(TypeError, match="Asymptotics"):
+        ratio(catalan, catalan.expansion)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"created by flanpy\.ratio"):
+        Ratio()
+    r = ratio(catalan, catalan)
+    with pytest.raises(ValueError, match="nothing to specialize"):
+        r.specialize(2)
+    with pytest.raises(TypeError, match="n must be an int"):
+        r.evalf(1.0)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="n must be >= 1"):
+        r.evalf(0)
+    with pytest.raises(ValueError, match="dps"):
+        r.evalf(10, dps=0)
+    assert r.evalf(10, count=0) == 0 and r.terms(0) == []
+
+
+def test_ratio_value_semantics() -> None:
+    a, b = asym(CATALAN, F), asym(CATALAN, F)
+    r, s = ratio(a, b), ratio(b, a)
+    assert r == s and hash(r) == hash(s) and r != 3
+    assert r.numerator is a and r.denominator is b and r.k is None
+    assert r.kset == a.kset
+    assert pickle.loads(pickle.dumps(r)) == r
+    with pytest.raises(AttributeError, match="immutable"):
+        setattr(r, "_limit", None)  # noqa: B010
+    with pytest.raises(AttributeError, match="immutable"):
+        del r._limit
+    assert repr(r) == (
+        "Ratio(exponent=Fraction(0, 1), limit=GammaConstant(AlgebraicReal(y - 1, 0), "
+        "gamma=()))"
+    )
+    assert str(r) == "1 · n^0"
