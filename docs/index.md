@@ -13,9 +13,10 @@ sets of alphabet sizes ({class}`flanpy.KSet`, {class}`flanpy.KCases`),
 elimination to one curve ({func}`flanpy.eliminate`, {func}`flanpy.eliminate_in_k`,
 {class}`flanpy.Curve`), exact real algebraic numbers ({class}`flanpy.AlgebraicReal`,
 {class}`flanpy.KRoot`), the dominant singularity ({func}`flanpy.singularity`,
-{func}`flanpy.singularity_in_k`) and the local expansion at the singularity
-({func}`flanpy.local_expansion`, {func}`flanpy.local_expansion_in_k`) are implemented
-so far, and the public API is not stable.
+{func}`flanpy.singularity_in_k`), the local expansion at the singularity
+({func}`flanpy.local_expansion`, {func}`flanpy.local_expansion_in_k`) and the
+asymptotics of the coefficients at a fixed $k$ ({func}`flanpy.asymptotics`) are
+implemented so far, and the public API is not stable.
 ```
 
 ## Pipeline
@@ -47,6 +48,7 @@ guide/kset
 guide/elimination
 guide/singularity
 guide/newton
+guide/transfer
 ```
 
 ## Running examples
@@ -124,6 +126,14 @@ $ pip install flanpy
 
 .. autoclass:: flanpy.LocalExpansion
    :members: singularity, alpha, ramification, b, c, terms, k, kset, specialize
+
+.. autofunction:: flanpy.asymptotics
+
+.. autoclass:: flanpy.Asymptotics
+   :members: expansion, rho, exponent, leading, terms, error_exponent, evalf, as_expr, k, kset
+
+.. autoclass:: flanpy.GammaConstant
+   :members: algebraic, gamma, evalf, as_expr
 ```
 
 Well-posedness of a {class}`~flanpy.System` follows
