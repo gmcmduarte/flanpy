@@ -822,7 +822,8 @@ class KCases[T]:
     def combine[U, V](self, other: KCases[U], f: Callable[[T, U], V]) -> KCases[V]:
         """Pairwise intersections of the pieces, with value ``f(a, b)``.
 
-        The result covers ``self.covered & other.covered``.
+        The result covers ``self.covered & other.covered``. ``f`` is called only
+        on the non-empty intersections.
 
         Examples
         --------
@@ -835,7 +836,7 @@ class KCases[T]:
         [10, ∞): 22
         """
         return KCases(
-            (s & t, f(a, b)) for s, a in self._pieces for t, b in other._pieces
+            (s & t, f(a, b)) for s, a in self._pieces for t, b in other._pieces if s & t
         )
 
     def flat_map[U](self, f: Callable[[T], KCases[U]]) -> KCases[U]:

@@ -608,6 +608,19 @@ def test_kcases_tail() -> None:
     assert KCases({}).tail is None
 
 
+def test_kcases_combine_only_nonempty_intersections() -> None:
+    calls = []
+
+    def f(u: int, v: int) -> int:
+        calls.append((u, v))
+        return u + v
+
+    a = KCases({KSet.of(1): 1, KSet([(2, None)]): 2})
+    b = KCases({KSet.of(1): 10, KSet([(2, None)]): 20})
+    assert [v for _, v in a.combine(b, f).pieces] == [11, 22]
+    assert calls == [(1, 10), (2, 20)]
+
+
 def test_kcases_map_restrict_combine() -> None:
     a = KCases({KSet([(1, 10)]): 1, KSet([(11, INF)]): 2})
     b = KCases({KSet([(5, 20)]): 10, KSet([(30, 40)]): 20})
