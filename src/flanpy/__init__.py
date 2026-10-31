@@ -7,16 +7,16 @@ elimination to a single algebraic curve ``G(z, w) = 0``, singularity analysis,
 Newton-Puiseux expansions, and transfer theorems for coefficient asymptotics,
 possibly for families indexed by the alphabet size ``k``.
 
-Pre-alpha: implemented so far are the input type :class:`System`, its power-series
-coefficients (:func:`series`, :func:`series_in_k`), sets of alphabet sizes
-:class:`KSet` and piecewise results :class:`KCases`, elimination to a :class:`Curve`
-(:func:`eliminate`, :func:`eliminate_in_k`), exact real algebraic numbers
+Alpha (the API may still change): implemented so far are the input type :class:`System`,
+its power-series coefficients (:func:`series`, :func:`series_in_k`), sets of alphabet
+sizes :class:`KSet` and piecewise results :class:`KCases`, elimination to a
+:class:`Curve` (:func:`eliminate`, :func:`eliminate_in_k`), exact real algebraic numbers
 (:class:`AlgebraicReal`), the dominant singularity, at a fixed ``k``
-(:func:`singularity`) and for symbolic ``k`` (:func:`singularity_in_k`,
-:class:`KRoot`), and the local expansion at the singularity, at a fixed ``k``
-(:func:`local_expansion`) and for symbolic ``k`` (:func:`local_expansion_in_k`), and
-the asymptotics of the coefficients, at a fixed ``k`` (:func:`asymptotics`) and for
-symbolic ``k`` (:func:`asymptotics_in_k`), with their ratios (:func:`ratio`).
+(:func:`singularity`) and for symbolic ``k`` (:func:`singularity_in_k`, :class:`KRoot`),
+and the local expansion at the singularity, at a fixed ``k`` (:func:`local_expansion`)
+and for symbolic ``k`` (:func:`local_expansion_in_k`), and the asymptotics of the
+coefficients, at a fixed ``k`` (:func:`asymptotics`) and for symbolic ``k``
+(:func:`asymptotics_in_k`), with their ratios (:func:`ratio`).
 
 Examples
 --------
