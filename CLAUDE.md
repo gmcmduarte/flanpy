@@ -251,5 +251,5 @@ By trusted publishing (OIDC): `.github/workflows/release.yml` runs on tags `v*`,
 - Confirm the Broda 2020 eq. (5) erratum with the authors (see Decisions, step 1).
 - FS Note VI.3 (p. 383), as extracted, lacks a sign: `e_k = Σ_ℓ λ_{k,ℓ} (−1)^ℓ (α − 1)…(α − ℓ)` matches eq. (13) (`λ_{1,1} = −1`, `λ_{1,2} = 1/2`; confirmed in review). Our reading, not an erratum; check the printed page (low priority; the code uses the Bernoulli recurrence).
 - Broda 2020 eqs. (37)-(38) use -b_k relative to eq. (20)'s b (b_k > 0 by monotonicity); the limit 1/2 stands; check the printed eqs. (20), (37), (38), then raise with the authors.
-- PyPI trusted publishing: `release.yml` added (release-0.1.0 PR); pending on Guilherme: the trusted publisher on pypi.org, the GitHub environment `pypi`, then revoking the `~/.pypirc` token.
+- PyPI trusted publishing: `release.yml` added (PR #9); pending on Guilherme: the trusted publisher on pypi.org, the GitHub environment `pypi`, then revoking the `~/.pypirc` token.
 - Remaining technical risk: Case I curves with larger systems, where the Groebner step may be slow. Non-radical roots are handled by the number fields of step 5. The Groebner step, `alpha` detection and the Puiseux expansion in `1/k` are all validated on the Broda 2020 examples.
