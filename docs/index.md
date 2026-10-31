@@ -64,6 +64,14 @@ examples/catalan
 examples/broda2020
 ```
 
+## Changes
+
+```{toctree}
+:maxdepth: 1
+
+changelog
+```
+
 ## Installation
 
 ```console
